@@ -4,6 +4,10 @@
 import frappe
 from frappe.tests import IntegrationTestCase
 
+# The tests create the users they need. Generated User records pull in ERPNext's Company and Email
+# Account records, which on an ERPNext bench without the payments app fail on Payment Gateway.
+IGNORE_TEST_RECORD_DEPENDENCIES = ["User"]
+
 
 class TestAIChatSession(IntegrationTestCase):
 	"""Regression tests for AI Chat Session — tenant-isolation column gap (BUG-018).

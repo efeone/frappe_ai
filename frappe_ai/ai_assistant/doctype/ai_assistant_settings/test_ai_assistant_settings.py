@@ -129,3 +129,20 @@ class TestAIAssistantSettings(unittest.TestCase):
 	def test_shortcut_blank_is_allowed(self):
 		# Empty shortcut means "no keyboard toggle wired" — must not raise.
 		self._save_with_shortcut("")
+
+
+class TestMcpServerUrl(unittest.TestCase):
+	def tearDown(self):
+		frappe.db.rollback()
+
+	def test_accepts_http_and_https_and_trims_the_slash(self):
+		settings = _reload_settings()
+		settings.mcp_url = "https://mcp.example.com/mcp/"
+		settings.save(ignore_version=True)
+		self.assertEqual(_reload_settings().mcp_url, "https://mcp.example.com/mcp")
+
+	def test_rejects_anything_that_is_not_a_url(self):
+		settings = _reload_settings()
+		settings.mcp_url = "mcp.example.com"
+		with self.assertRaises(frappe.ValidationError):
+			settings.save(ignore_version=True)

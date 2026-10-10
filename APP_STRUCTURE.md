@@ -14,9 +14,15 @@ frappe_ai/
     ├── hooks.py                # App metadata + asset registration + install hooks
     ├── install.py              # after_install / after_migrate: create Settings singleton
     ├── modules.txt             # "AI Assistant"
+    ├── frappeforge/            # FrappeForge on the live site (docs/FRAPPEFORGE.md)
+    │   ├── guard.py            # auth_hooks: agent users may only read and propose
+    │   ├── connection.py       # agent user per connection, keys, expiry, revocation
+    │   ├── release.py          # reads a Package Release tarball safely
+    │   └── deploy.py           # propose / approve / apply / rollback, change log
     ├── api/
     │   ├── chat.py             # start_stream, get_recent_messages, _stream_to_agent
-    │   └── health.py         # test_connection (called from Settings JS)
+    │   ├── health.py         # test_connection (called from Settings JS)
+    │   └── frappeforge.py    # FrappeForge HTTP API (status, propose_release, approve, ...)
     ├── ai_assistant/
     │   ├── doctype/
     │   │   ├── ai_assistant_settings/    # Singleton: enabled, timeout, sidebar_width, …
@@ -92,6 +98,14 @@ The user's `sid` cookie is forwarded straight to the agent (`requests.post(..., 
 The Settings singleton is created by `install.py:after_install` / `after_migrate`. `after_migrate` additionally re-imports the bundled `Frappe AI` workspace JSON via `frappe.modules.import_file.import_file_by_path(force=True)` so workspace content blob updates reach existing installs (Frappe's normal fixture sync leaves an installed workspace's `content` field untouched). `before_save` always refreshes the `agent_url` display field from `site_config.json` so the form shows the live value.
 
 `validate` rejects timeouts outside 1–300s, sidebar widths outside 300–600px, and any keyboard shortcut that collides with a Frappe v16 hard-bound combo.
+
+### FrappeForge DocTypes
+
+| DocType | Purpose |
+| --- | --- |
+| FrappeForge Connection | One per connected FrappeForge workspace: agent user, expiry, allowed IPs, read roles, status |
+| FrappeForge Proposed Release | A release FrappeForge uploaded, the records it carries, and its approval outcome |
+| FrappeForge Change Log | One row per record an approved release or rollback changed, with before and after JSON |
 
 ## Customization
 

@@ -33,3 +33,14 @@ doc_events = {
 		"after_insert": "frappe_ai.api.realtime.broadcast_message_added",
 	},
 }
+
+# FrappeForge (see frappe_ai/frappeforge/__init__.py): agent users may only read and propose.
+# auth_hooks run right after an API key sets the session user.
+auth_hooks = ["frappe_ai.frappeforge.guard.enforce"]
+
+scheduler_events = {
+	"hourly": [
+		"frappe_ai.frappeforge.connection.expire_connections",
+		"frappe_ai.frappeforge.deploy.expire_proposals",
+	],
+}

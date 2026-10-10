@@ -3,6 +3,10 @@
 
 frappe.ui.form.on('AI Assistant Settings', {
 	refresh: function(frm) {
+		if (frappe.user.has_role('System Manager') && window.frappe_ai_frappeforge) {
+			frm.add_custom_button(__('Connect to FrappeForge'), () => window.frappe_ai_frappeforge.connect());
+		}
+
 		if (!frm.is_new()) {
 			// OBS-016: closure-scoped flag prevents stacked toasts and
 			// hammering the agent when the user mashes the button. The

@@ -12,7 +12,9 @@
   "timeout",
   "section_ui",
   "sidebar_width",
-  "keyboard_shortcut"
+  "keyboard_shortcut",
+  "section_frappeforge",
+  "mcp_url"
  ],
  "fields": [
   {
@@ -47,7 +49,7 @@
   },
   {
    "default": "380",
-   "description": "Chat panel width in pixels. Range 300–600.",
+   "description": "Chat panel width in pixels. Range 300\u2013600.",
    "fieldname": "sidebar_width",
    "fieldtype": "Int",
    "label": "Sidebar Width"
@@ -58,6 +60,17 @@
    "fieldname": "keyboard_shortcut",
    "fieldtype": "Data",
    "label": "Keyboard Shortcut"
+  },
+  {
+   "fieldname": "section_frappeforge",
+   "fieldtype": "Section Break",
+   "label": "FrappeForge"
+  },
+  {
+   "fieldname": "mcp_url",
+   "fieldtype": "Data",
+   "label": "MCP Server URL",
+   "description": "This site's frappe-mcp-server, if one is running for it. FrappeForge reads live data through it; it is added to the Connect to FrappeForge snippet."
   }
  ],
  "issingle": 1,

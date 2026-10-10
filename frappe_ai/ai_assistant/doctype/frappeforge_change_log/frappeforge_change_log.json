@@ -1,0 +1,153 @@
+{
+ "actions": [],
+ "autoname": "format:FFCL-{#####}",
+ "creation": "2026-10-10 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "proposed_release",
+  "connection",
+  "action",
+  "status",
+  "target_doctype",
+  "target_name",
+  "column_break_1",
+  "approved_by",
+  "applied_at",
+  "rollback_requested",
+  "rollback_of",
+  "rolled_back_by",
+  "section_content",
+  "before_json",
+  "after_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "proposed_release",
+   "fieldtype": "Link",
+   "label": "Proposed Release",
+   "options": "FrappeForge Proposed Release",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Connection",
+   "options": "FrappeForge Connection",
+   "read_only": 1
+  },
+  {
+   "fieldname": "action",
+   "fieldtype": "Select",
+   "label": "Action",
+   "options": "Create\nUpdate\nRollback",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Applied\nRolled Back",
+   "default": "Applied",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "target_doctype",
+   "fieldtype": "Data",
+   "label": "Document Type",
+   "read_only": 1,
+   "in_list_view": 1,
+   "description": "Plain text, not a link: the log must never stop the site owner deleting or renaming the record."
+  },
+  {
+   "fieldname": "target_name",
+   "fieldtype": "Data",
+   "label": "Document",
+   "read_only": 1,
+   "in_list_view": 1,
+   "description": "Plain text, not a link: the log must never stop the site owner deleting or renaming the record."
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break",
+   "label": ""
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "applied_at",
+   "fieldtype": "Datetime",
+   "label": "Applied At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rollback_requested",
+   "fieldtype": "Check",
+   "label": "Rollback Requested by Agent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rollback_of",
+   "fieldtype": "Link",
+   "label": "Rolls Back",
+   "options": "FrappeForge Change Log",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rolled_back_by",
+   "fieldtype": "Link",
+   "label": "Rolled Back By",
+   "options": "FrappeForge Change Log",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_content",
+   "fieldtype": "Section Break",
+   "label": "Content"
+  },
+  {
+   "fieldname": "before_json",
+   "fieldtype": "Code",
+   "label": "Before",
+   "options": "JSON",
+   "read_only": 1,
+   "description": "Empty when the release created the document."
+  },
+  {
+   "fieldname": "after_json",
+   "fieldtype": "Code",
+   "label": "After",
+   "options": "JSON",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-10 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Assistant",
+ "name": "FrappeForge Change Log",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "role": "System Manager",
+   "report": 1,
+   "export": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "title_field": "target_name",
+ "in_create": 1
+}

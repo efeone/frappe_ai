@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import re
+from urllib.parse import urlparse
 
 import frappe
 from frappe.model.document import Document
@@ -33,6 +34,11 @@ class AIAssistantSettings(Document):
 			frappe.throw(frappe._("Sidebar width must be between 300 and 600 pixels."))
 		if self.keyboard_shortcut:
 			_validate_shortcut(self.keyboard_shortcut)
+		if self.mcp_url:
+			self.mcp_url = self.mcp_url.strip().rstrip("/")
+			parsed = urlparse(self.mcp_url)
+			if parsed.scheme not in ("http", "https") or not parsed.netloc:
+				frappe.throw(frappe._("MCP Server URL must start with https:// (or http://)."))
 
 
 _RESERVED_SHORTCUTS = {

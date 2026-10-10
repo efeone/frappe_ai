@@ -1,0 +1,196 @@
+{
+ "actions": [],
+ "autoname": "format:FFR-{#####}",
+ "creation": "2026-10-10 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "package",
+  "version",
+  "status",
+  "has_executable",
+  "column_break_1",
+  "connection",
+  "proposed_by",
+  "conversation_id",
+  "idempotency_key",
+  "section_summary",
+  "summary",
+  "section_records",
+  "changes_html",
+  "records_json",
+  "extra_records_json",
+  "release_file",
+  "section_outcome",
+  "approved_by",
+  "approved_at",
+  "rejected_reason",
+  "import_log",
+  "error"
+ ],
+ "fields": [
+  {
+   "fieldname": "package",
+   "fieldtype": "Data",
+   "label": "Package",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Data",
+   "label": "Version",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nApproved\nApplying\nApplied\nFailed\nRejected\nExpired",
+   "default": "Pending",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "has_executable",
+   "fieldtype": "Check",
+   "label": "Contains Code",
+   "read_only": 1,
+   "in_list_view": 1,
+   "description": "The release carries scripts, reports, web forms or notifications that run code."
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break",
+   "label": ""
+  },
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Connection",
+   "options": "FrappeForge Connection",
+   "read_only": 1
+  },
+  {
+   "fieldname": "proposed_by",
+   "fieldtype": "Link",
+   "label": "Proposed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "conversation_id",
+   "fieldtype": "Data",
+   "label": "FrappeForge Conversation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "label": "Idempotency Key",
+   "read_only": 1,
+   "unique": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "section_summary",
+   "fieldtype": "Section Break",
+   "label": "Agent's Description"
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Small Text",
+   "label": "Summary",
+   "read_only": 1,
+   "description": "Written by the FrappeForge agent. Review the records below, not this text."
+  },
+  {
+   "fieldname": "section_records",
+   "fieldtype": "Section Break",
+   "label": "What This Release Changes"
+  },
+  {
+   "fieldname": "changes_html",
+   "fieldtype": "HTML",
+   "label": "Changes"
+  },
+  {
+   "fieldname": "records_json",
+   "fieldtype": "Code",
+   "label": "Records (JSON)",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "extra_records_json",
+   "fieldtype": "Code",
+   "label": "Workflow and Report Records (JSON)",
+   "options": "JSON",
+   "read_only": 1,
+   "description": "Workflows and Reports travel outside the package and are applied after it."
+  },
+  {
+   "fieldname": "release_file",
+   "fieldtype": "Attach",
+   "label": "Release Tarball",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_outcome",
+   "fieldtype": "Section Break",
+   "label": "Outcome"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_at",
+   "fieldtype": "Datetime",
+   "label": "Approved At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rejected_reason",
+   "fieldtype": "Small Text",
+   "label": "Rejection Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "import_log",
+   "fieldtype": "Code",
+   "label": "Import Log",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error",
+   "fieldtype": "Small Text",
+   "label": "Error",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-10 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Assistant",
+ "name": "FrappeForge Proposed Release",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "role": "System Manager",
+   "report": 1,
+   "export": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "title_field": "package"
+}

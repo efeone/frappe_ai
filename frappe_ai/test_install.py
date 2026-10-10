@@ -33,3 +33,22 @@ class TestInstall(unittest.TestCase):
 		install._ensure_settings()
 		install._ensure_settings()
 		self.assertTrue(frappe.db.exists("AI Assistant Settings", "AI Assistant Settings"))
+
+	def test_after_migrate_sets_up_the_frappeforge_agent_role_read_only(self):
+		frappe.db.delete("Custom DocPerm", {"role": "FrappeForge Agent"})
+		frappe.db.delete("Has Role", {"role": "FrappeForge Agent"})
+		frappe.db.delete("Role", {"name": "FrappeForge Agent"})
+		try:
+			install.after_migrate()
+			self._assert_agent_role()
+		finally:
+			frappe.db.rollback()
+
+	def _assert_agent_role(self):
+		self.assertTrue(frappe.db.exists("Role", "FrappeForge Agent"))
+		perms = frappe.get_all(
+			"Custom DocPerm",
+			filters={"role": "FrappeForge Agent", "parent": "Custom Field"},
+			fields=["read", "write", "create", "delete"],
+		)
+		self.assertEqual([(p.read, p.write, p.create, p.delete) for p in perms], [(1, 0, 0, 0)])

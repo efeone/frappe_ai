@@ -4,6 +4,10 @@ import { useSettings } from "./frappe_ai/composables/useSettings";
 import { decideBoot } from "./frappe_ai/utils/boot-decision";
 import { frappeIcon } from "./frappe_ai/utils/frappe-icon";
 import { createSidebarVisibilityController } from "./frappe_ai/utils/sidebar-visibility";
+import { connectFrappeForge, rotateFrappeForgeKey } from "./frappe_ai/utils/frappeforge-connect";
+
+// FrappeForge connection dialogs, called from the FrappeForge DocType form scripts.
+(window as any).frappe_ai_frappeforge = { connect: () => connectFrappeForge(), rotate: (name: string) => rotateFrappeForgeKey(name) };
 
 const SIDEBAR_ID = "frappe-ai-sidebar-root";
 

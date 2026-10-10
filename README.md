@@ -32,6 +32,10 @@ And open `/app/ai-assistant-settings` to toggle **Enabled**.
 
 See [QUICKSTART.md](QUICKSTART.md) for a 5-minute walkthrough or [INSTALLATION.md](INSTALLATION.md) for the full guide.
 
+## Connect to FrappeForge
+
+This app also lets a site owner connect the site to FrappeForge, the AI engineering workspace for Frappe. FrappeForge can then read customizations and propose releases that a System Manager approves, with a change log and one-click rollback. See [docs/FRAPPEFORGE.md](docs/FRAPPEFORGE.md).
+
 ## Usage
 
 Click the AI button in the navbar (or press your configured shortcut) and type a query. Examples:
