@@ -11,6 +11,7 @@ An in-desk AI assistant for Frappe/ERPNext. Streams responses from a configured 
 - Per-user conversation history persisted as `AI Chat Session` / `AI Chat Message` doctypes
 - Page-context forwarding: the agent sees the user's current route / doctype / docname for grounded answers
 - Authentication via the user's existing `sid` cookie — no extra OAuth client to provision
+- Multi-site aware: every request to the agent names the site it came from, so one agent can serve many sites on a shared bench
 
 ## Installation
 

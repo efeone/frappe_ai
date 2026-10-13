@@ -377,15 +377,20 @@ def _stream_to_agent(
 		len(message),
 	)
 
+	headers = {
+		"Content-Type": "application/json",
+		"Accept": "text/event-stream",
+	}
+	site_name = getattr(getattr(frappe, "local", None), "site", None)
+	if site_name:
+		headers["X-Frappe-Site-Name"] = site_name
+
 	try:
 		with requests.post(
 			f"{agent_url}/api/v1/chat",
 			json=payload,
 			cookies={"sid": sid},
-			headers={
-				"Content-Type": "application/json",
-				"Accept": "text/event-stream",
-			},
+			headers=headers,
 			timeout=timeout_seconds,
 			stream=True,
 		) as response:

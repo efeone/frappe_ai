@@ -33,9 +33,15 @@ def test_connection():
 			# settings page caller renders the message verbatim.
 			return {"success": False, "message": str(e)}
 
+		headers = {}
+		site_name = getattr(getattr(frappe, "local", None), "site", None)
+		if site_name:
+			headers["X-Frappe-Site-Name"] = site_name
+
 		health_response = requests.get(
 			f"{agent_url}/health",
 			cookies={"sid": frappe.session.sid},
+			headers=headers or None,
 			timeout=10,
 		)
 
