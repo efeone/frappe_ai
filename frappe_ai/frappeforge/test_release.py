@@ -9,12 +9,13 @@ import json
 import tarfile
 import tempfile
 import unittest
+from collections.abc import Mapping
 from pathlib import Path
 
 from frappe_ai.frappeforge import release
 
 
-def _tarball(entries: dict[str, bytes | None], *, symlink: str | None = None) -> Path:
+def _tarball(entries: Mapping[str, bytes | None], *, symlink: str | None = None) -> Path:
 	"""entries: archive path -> file bytes (None makes a directory)."""
 	path = Path(tempfile.mkdtemp()) / "sales_rules-0.0.1.tar.gz"
 	with tarfile.open(path, "w:gz") as tar:

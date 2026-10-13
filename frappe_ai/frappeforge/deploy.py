@@ -318,6 +318,7 @@ def _inspect_bytes(content: bytes, max_bytes: int) -> dict:
 			return release.inspect_release(path, max_bytes=max_bytes)
 		except release.InvalidRelease as exc:
 			frappe.throw(_("Invalid release: {0}").format(exc))
+			raise  # for the type checker: frappe.throw never returns
 
 
 def _with_actions(records: list[dict]) -> list[dict]:

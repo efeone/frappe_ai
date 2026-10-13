@@ -123,6 +123,7 @@ class TestPropose(DeployTestCase):
 		other must return that proposal instead of failing."""
 		first = self.propose(idempotency_key="race-1")
 		real_get_value = frappe.db.get_value
+		key_lookups = {"count": 0}
 
 		def miss_first_lookup(doctype, filters=None, *args, **kwargs):
 			if (
@@ -130,12 +131,11 @@ class TestPropose(DeployTestCase):
 				and isinstance(filters, dict)
 				and "idempotency_key" in filters
 			):
-				miss_first_lookup.calls += 1
-				if miss_first_lookup.calls == 1:
+				key_lookups["count"] += 1
+				if key_lookups["count"] == 1:
 					return None
 			return real_get_value(doctype, filters, *args, **kwargs)
 
-		miss_first_lookup.calls = 0
 		with patch.object(frappe.db, "get_value", side_effect=miss_first_lookup):
 			second = self.propose(idempotency_key="race-1")
 		self.assertEqual(second["name"], first["name"])

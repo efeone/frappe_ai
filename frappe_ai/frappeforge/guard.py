@@ -86,7 +86,7 @@ def enforce() -> None:
 		return
 	now = now_datetime()
 	conn = connection.agent_connection(user)
-	if not connection.is_usable(conn, now):
+	if conn is None or not connection.is_usable(conn, now):
 		raise frappe.PermissionError(_("This FrappeForge connection is revoked or expired."))
 	request = frappe.request
 	allowed, reason = decide(

@@ -132,14 +132,15 @@ class TestAgentLookup(ConnectionTestCase):
 	def test_agent_connection_for_agent_and_non_agent_users(self):
 		result = self.make()
 		found = connection.agent_connection(result["user"])
+		assert found is not None
 		self.assertEqual(found["name"], result["connection"])
 		self.assertIsNone(connection.agent_connection("Administrator"))
 
 	def test_revocation_is_seen_immediately_despite_the_cache(self):
 		result = self.make()
-		self.assertEqual(connection.agent_connection(result["user"])["status"], "Active")
+		self.assertEqual((connection.agent_connection(result["user"]) or {}).get("status"), "Active")
 		connection.revoke(result["connection"])
-		self.assertEqual(connection.agent_connection(result["user"])["status"], "Revoked")
+		self.assertEqual((connection.agent_connection(result["user"]) or {}).get("status"), "Revoked")
 
 	def test_is_usable_checks_status_and_expiry(self):
 		now = now_datetime()

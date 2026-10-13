@@ -37,6 +37,7 @@ def propose_release(
 	upload = frappe.request.files.get("release") if frappe.request and frappe.request.files else None
 	if not upload:
 		frappe.throw(_("Send the release tarball in the 'release' field."))
+	assert upload is not None  # narrow for the type checker: frappe.throw never returns
 	return deploy.propose(
 		upload.stream.read(),
 		upload.filename or "",

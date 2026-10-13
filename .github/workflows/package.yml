@@ -125,28 +125,33 @@ jobs:
       # compiles them. fpm needs only a bench-shaped directory with frappe's checkout and
       # node_modules beside the app; no virtualenv, no site. Cached per frappe line and month
       # so a cold run pays the clone and yarn install at most once a month.
-      - name: Cache key
-        id: month
-        run: echo "ym=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+      #
+      # The bench lives OUTSIDE the checkout: fpm stages the whole checkout into
+      # <bench>/apps/frappe_ai, and a bench inside it would be copied into itself.
+      - name: Locate the build bench
+        id: bench
+        run: |
+          echo "BUILD_BENCH=$HOME/build-bench" >> "$GITHUB_ENV"
+          echo "ym=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
 
       - name: Restore Frappe asset pipeline
         id: frappe-cache
         uses: actions/cache@v4
         with:
-          path: build-bench/apps/frappe
-          key: frappe-assets-${{ env.FRAPPE_REF }}-${{ steps.month.outputs.ym }}
+          path: ${{ env.BUILD_BENCH }}/apps/frappe
+          key: frappe-assets-${{ env.FRAPPE_REF }}-${{ steps.bench.outputs.ym }}
 
       - name: Prepare Frappe asset pipeline
         if: steps.frappe-cache.outputs.cache-hit != 'true'
         run: |
-          mkdir -p build-bench/apps
-          git clone --depth 1 --branch "$FRAPPE_REF" https://github.com/frappe/frappe.git build-bench/apps/frappe
-          ( cd build-bench/apps/frappe && yarn install --frozen-lockfile --network-timeout 600000 )
+          mkdir -p "$BUILD_BENCH/apps"
+          git clone --depth 1 --branch "$FRAPPE_REF" https://github.com/frappe/frappe.git "$BUILD_BENCH/apps/frappe"
+          ( cd "$BUILD_BENCH/apps/frappe" && yarn install --frozen-lockfile --network-timeout 600000 )
 
       - name: Lay out the build bench
         run: |
-          mkdir -p build-bench/sites
-          echo frappe > build-bench/sites/apps.txt
+          mkdir -p "$BUILD_BENCH/sites"
+          echo frappe > "$BUILD_BENCH/sites/apps.txt"
 
       # Both architectures are vendored in full: the Vyogo pools run amd64 and arm64
       # nodes, and a bench installs the package offline, so a missing wheel is a failed
@@ -161,7 +166,7 @@ jobs:
             --version "$VERSION" \
             --python-version "$BENCH_PYTHON" \
             --platform manylinux2014_x86_64 --platform manylinux2014_aarch64 \
-            --bench-path "$PWD/build-bench" \
+            --bench-path "$BUILD_BENCH" \
             --skip-local-install --overwrite \
             --output-path dist
           set -- dist/*.fpm
@@ -178,7 +183,9 @@ jobs:
 
       # Publishing proves an artifact exists; installing it proves it works. The package
       # goes into the same SNE image the Vyogo pools run, through fpm itself, and the
-      # compiled bundle must be where Frappe serves it from.
+      # compiled bundle must be where Frappe serves it from. The test suite is CI's job
+      # (ci.yml runs it on a bench built from source); here the question is only whether
+      # the package installs.
       - name: Verify install in the SNE image
         timeout-minutes: 15
         run: |
@@ -195,8 +202,7 @@ jobs:
             --bench-path /home/frappe/frappe-bench --site dev.localhost --skip-required-apps-check
           docker exec -w /home/frappe/frappe-bench sne bench --site dev.localhost list-apps | grep -w "$APP"
           docker exec -w /home/frappe/frappe-bench sne sh -c "ls sites/assets/$APP/dist/js/*.bundle.*.js"
-          docker exec -w /home/frappe/frappe-bench sne bench --site dev.localhost set-config allow_tests true
-          docker exec -w /home/frappe/frappe-bench sne bench --site dev.localhost run-tests --app "$APP"
+          docker exec -w /home/frappe/frappe-bench sne sh -c "grep -q '\"$APP.bundle.js\"' sites/assets/assets.json"
           docker rm -f sne
 
       - name: Publish to the FPM registry
