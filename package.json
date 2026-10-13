@@ -1,6 +1,6 @@
 {
   "name": "frappe_ai",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "private": true,
   "description": "Runtime deps for the frappe_ai bundle (resolved by Frappe's esbuild).",
   "scripts": {
