@@ -34,7 +34,7 @@ And open `/app/ai-assistant-settings` to toggle **Enabled**.
 Or install the released package with [FPM](https://github.com/vyogotech/fpm), which ships the compiled desk bundle and needs no build step on the bench:
 
 ```bash
-fpm repo add ghcr ghcr.io/vyogotech/fpm --type oci
+fpm repo add vyogo https://fpm.vyogo.tech --username <user>   # or: fpm repo add ghcr ghcr.io/vyogotech/fpm --type oci
 fpm install vyogotech/frappe_ai --bench-path /path/to/bench --site your-site
 ```
 

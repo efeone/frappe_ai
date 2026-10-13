@@ -34,10 +34,11 @@ bench restart
 
 ### Alternative: install the FPM package
 
-Every tagged release, and a snapshot of every push to `main`, is published as an [FPM](https://github.com/vyogotech/fpm) package in the Vyogo registry on GHCR. The package carries the compiled desk bundle and its Python dependencies, so a bench installs it without Node or network access to PyPI:
+Every tagged release, and a snapshot of every push to `main`, is published as an [FPM](https://github.com/vyogotech/fpm) package to the Vyogo FPM registry at `https://fpm.vyogo.tech` and, as an OCI artifact, to GHCR. The package carries the compiled desk bundle and its Python dependencies, so a bench installs it without Node or network access to PyPI:
 
 ```bash
-fpm repo add ghcr ghcr.io/vyogotech/fpm --type oci
+fpm repo add vyogo https://fpm.vyogo.tech --username <user>   # credentials from the platform team
+# or, anonymously: fpm repo add ghcr ghcr.io/vyogotech/fpm --type oci
 fpm install vyogotech/frappe_ai --bench-path /path/to/bench --site your-site.local
 ```
 
