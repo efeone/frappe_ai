@@ -1,18 +1,68 @@
 name: CI
 
+# lint → (test | package → verify) → publish
+#
+# Everything that needs a bench runs on the SNE image the Vyogo pools run: one container
+# with MariaDB, Redis, workers and a ready site. `test` mounts this checkout into that bench
+# and runs the app's suite; `package` builds the FPM package (compiled desk bundles,
+# vendored Python dependencies for amd64 and arm64); `verify` installs that package into a
+# fresh SNE bench with `fpm install`, exactly as a pool would. Only a package that passed
+# both is published as an OCI artifact to the FPM registry on GHCR.
+#
+#   any branch     lint, test, package, verify
+#   push to main   + publish  vyogotech/frappe_ai==X.Y.Z-git.<date>.<sha>   (a prerelease, never `latest`)
+#   tag v<X.Y.Z>   + publish  vyogotech/frappe_ai==X.Y.Z                     (must equal frappe_ai.__version__)
+#   dispatch       as the ref, with `publish` and `version` overridable
+#
+# Install from the registry:
+#   fpm repo add ghcr ghcr.io/vyogotech/fpm --type oci
+#   fpm install vyogotech/frappe_ai --bench-path <bench> --site <site>
+
 on:
   push:
     branches: ['**']
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish to the registry even from a branch.
+        type: boolean
+        default: false
+      version:
+        description: Version to package. Default is derived from the ref.
+        type: string
+        default: ''
+
+# GITHUB_TOKEN is the pipeline's own credential: `packages: write` lets it push to
+# ghcr.io/<org>/..., with no PAT to provision. Set the FPM_REGISTRY_PASSWORD secret
+# (and FPM_REGISTRY_USERNAME variable) only when the registry lives elsewhere.
+permissions:
+  contents: read
+  packages: write
 
 concurrency:
-  # Cancel older runs of the same branch when a newer commit arrives.
+  # A newer commit cancels an older branch run; a publishing run (main, tags) is left to finish.
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref_type != 'tag' && github.ref_name != 'main' }}
+
+env:
+  FPM_VERSION: v4.6.0
+  SNE_IMAGE: docker.io/vyogo/erpnext:sne-version-16
+  # The frappe whose esbuild compiles this app's desk bundles. Must match the bench line
+  # the package targets; the Vyogo Cloud pools and the SNE image are v16.
+  FRAPPE_REF: version-16
+  # Python of the destination bench. Frappe v16 (16.18+) runs on 3.14.
+  BENCH_PYTHON: '3.14'
+  # Where the package goes: <registry>/vyogotech/frappe_ai. The default is the shared
+  # Vyogo FPM registry that `fpm mirror` fills with frappe and erpnext.
+  FPM_OCI_REPOSITORY: ${{ vars.FPM_OCI_REPOSITORY || 'ghcr.io/vyogotech/fpm' }}
+  ORG: vyogotech
+  APP: frappe_ai
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────
-  # Tier 1 — static checks. ~1–2 min. Run all linters / type-checkers
-  # against the working tree without spinning up a Frappe bench.
+  # Tier 1 — static checks. ~1–2 min. Linters and type-checkers against the
+  # working tree; no bench.
   # ──────────────────────────────────────────────────────────────────────
   lint:
     name: Lint & type-check
@@ -83,134 +133,334 @@ jobs:
           PY
 
   # ──────────────────────────────────────────────────────────────────────
-  # Tier 2 — Frappe integration. ~8–12 min. Spin up a real bench against
-  # Frappe v16, install the app the same way production does
-  # (`bench get-app`), build the bundle, run the test suite.
-  #
-  # No manual mv / pip install / apps.txt manipulation here — those are
-  # exactly the bookkeeping steps that `bench get-app` exists to do for
-  # us. If this job passes, the app installs cleanly under real bench.
+  # Tier 2a — the test suite, on the SNE bench. ~5–8 min. The checkout is
+  # mounted as the bench's copy of the app (the image's run script
+  # pip-installs and registers it), installed on the ready site, and tested
+  # there. No bench is built from source and no database is provisioned.
   # ──────────────────────────────────────────────────────────────────────
-  integration:
-    name: Frappe v16 integration
+  test:
+    name: Test on the SNE bench
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # The runner user and the image's frappe user are both uid 1001, so the mounted
+      # checkout is writable where the bench expects to write (egg-info, built assets).
+      - name: Start the SNE bench with this checkout as the app
+        run: |
+          docker run -d --name sne -p 8000:8000 \
+            -v "$GITHUB_WORKSPACE:/home/frappe/frappe-bench/apps/$APP" "$SNE_IMAGE"
+          for _ in $(seq 1 60); do
+            curl -fsS -o /dev/null -H 'Host: dev.localhost' http://localhost:8000/api/method/ping && exit 0
+            sleep 5
+          done
+          echo "::error::SNE site never came up"; docker logs --tail 80 sne; exit 1
+
+      - name: Install the app on the site
+        run: docker exec -w /home/frappe/frappe-bench sne bench --site dev.localhost install-app "$APP"
+
+      # The SNE site ships without an encryption key. Frappe generates one the first time a
+      # secret is stored, but a web worker caches the site config it started with, so a key
+      # born during the test run is never loaded by the worker and every API-secret decrypt
+      # fails with 401. Generate it before the workers restart.
+      - name: Create the site's encryption key
+        run: |
+          docker exec -w /home/frappe/frappe-bench sne bench --site dev.localhost execute frappe.utils.password.get_encryption_key >/dev/null
+          docker exec -w /home/frappe/frappe-bench sne sh -c 'grep -q encryption_key sites/dev.localhost/site_config.json'
+
+      # Running web and worker processes load an app when they start. A restart of the
+      # container is the SNE's `bench restart`; the database and the site survive it.
+      - name: Restart the bench so the web workers load the app
+        run: |
+          docker restart sne
+          for _ in $(seq 1 60); do
+            curl -fsS -o /dev/null -H 'Host: dev.localhost' http://localhost:8000/api/method/ping && exit 0
+            sleep 5
+          done
+          echo "::error::SNE site did not come back after restart"; docker logs --tail 80 sne; exit 1
+
+      - name: Run the test suite
+        run: |
+          docker exec -w /home/frappe/frappe-bench sne bench --site dev.localhost list-apps | grep -w "$APP"
+          docker exec -w /home/frappe/frappe-bench sne bench --site dev.localhost set-config allow_tests true
+          docker exec -w /home/frappe/frappe-bench sne bench --site dev.localhost run-tests --app "$APP"
+
+      - name: Bench logs on failure
+        if: failure()
+        run: |
+          docker logs --tail 200 sne || true
+          docker exec -w /home/frappe/frappe-bench sne sh -c 'tail -n 200 logs/*.log' || true
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Tier 2b — the package. ~3–5 min (cold: + a frappe clone and yarn install,
+  # cached per month). The artifact of this job is what gets verified and
+  # published; nothing downstream rebuilds anything.
+  # ──────────────────────────────────────────────────────────────────────
+  package:
+    name: Build FPM package
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: lint
-
-    services:
-      mariadb:
-        image: mariadb:10.6
-        env:
-          MARIADB_ROOT_PASSWORD: travis
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "healthcheck.sh --connect --innodb_initialized"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-
-      redis-cache:
-        image: redis:alpine
-        ports:
-          - 13000:6379
-
-      redis-queue:
-        image: redis:alpine
-        ports:
-          - 11000:6379
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      kind: ${{ steps.version.outputs.kind }}
+      file: ${{ steps.build.outputs.file }}
 
     steps:
+      - uses: actions/checkout@v6
+        with:
+          # fpm records the exact commit in the package; the snapshot version names it too.
+          fetch-depth: 0
+
+      - name: Resolve package version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          app_version="$(python3 - <<'PY'
+          import re
+          print(re.search(r'__version__\s*=\s*"([^"]+)"', open("frappe_ai/__init__.py").read()).group(1))
+          PY
+          )"
+          if [ -n "$INPUT_VERSION" ]; then
+            version="$INPUT_VERSION"; kind=manual
+          elif [ "$REF_TYPE" = tag ]; then
+            version="${REF_NAME#v}"; kind=release
+            if [ "$version" != "$app_version" ]; then
+              echo "::error::tag $REF_NAME does not match frappe_ai.__version__ = $app_version; bump __init__.py first"
+              exit 1
+            fi
+          else
+            version="${app_version}-git.$(date -u +%Y%m%d).$(git rev-parse --short=7 HEAD)"; kind=snapshot
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "Packaging $ORG/$APP==$version ($kind)"
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          # Frappe v16 (16.18+) requires Python 3.14.
-          python-version: '3.14'
+          python-version: ${{ env.BENCH_PYTHON }}
 
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
-          # Frappe v16 frontend declares engines.node >= 24.
           node-version: '24'
 
-      - name: System packages
+      - name: Install build tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            mariadb-client \
-            libmariadb-dev \
-            wkhtmltopdf \
-            xvfb \
-            libfontconfig
+          python -m pip install --upgrade pip wheel
+          npm install -g yarn
 
-      - name: Configure MariaDB for Frappe (utf8mb4 + remote root)
-        run: |
-          mysql -h 127.0.0.1 -P 3306 -u root -ptravis -e "
-            SET GLOBAL character_set_server = 'utf8mb4';
-            SET GLOBAL collation_server = 'utf8mb4_unicode_ci';
-            CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY 'travis';
-            GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
-            FLUSH PRIVILEGES;"
-
-      - name: Install frappe-bench
-        run: pip install frappe-bench
-
-      - name: bench init (Frappe v16)
-        run: |
-          bench init \
-            --skip-redis-config-generation \
-            --skip-assets \
-            --python "$(which python3)" \
-            --frappe-branch version-16 \
-            frappe-bench
-
-      - name: Point bench at the CI Redis instances
-        working-directory: frappe-bench
-        run: |
-          bench set-config -g redis_cache "redis://localhost:13000"
-          bench set-config -g redis_queue "redis://localhost:11000"
-          bench set-config -g redis_socketio "redis://localhost:13000"
-
-      - name: Install this app via `bench get-app` (production install path)
-        working-directory: frappe-bench
+      - name: Obtain FPM CLI
         env:
-          # Pass GITHUB_TOKEN so `git clone` works even if the repo is
-          # private. The token has read access to the current repository
-          # automatically.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Pass ref_name and repository through env vars so a maliciously
-          # named branch (e.g. `;rm -rf /`) cannot break out of the
-          # `bench get-app` command. With on.push.branches: ['**'] the
-          # trigger fires on any pushed branch including PRs from forks
-          # via the same actor — direct interpolation into a `run:` block
-          # would let the branch name execute as shell.
-          BRANCH: ${{ github.ref_name }}
-          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --global user.email "ci@example.com"
-          git config --global user.name "CI"
-          git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
-          bench get-app \
-            --branch "$BRANCH" \
-            --skip-assets \
-            "https://github.com/$REPO.git"
+          tmp="$(mktemp -d)"
+          gh release download "$FPM_VERSION" --repo vyogotech/fpm \
+            --pattern 'fpm-linux-amd64' --pattern 'fpm-linux-amd64.sha256' --dir "$tmp"
+          ( cd "$tmp" && sha256sum -c fpm-linux-amd64.sha256 )
+          mkdir -p bin
+          install -m 0755 "$tmp/fpm-linux-amd64" bin/fpm
+          rm -rf "$tmp"
+          ./bin/fpm --version
 
-      - name: Create test site
-        working-directory: frappe-bench
+      # A prod package must ship its desk bundles compiled, and Frappe's own esbuild is what
+      # compiles them. fpm needs only a bench-shaped directory with frappe's checkout and
+      # node_modules beside the app; no virtualenv, no site. Cached per frappe line and month
+      # so a cold run pays the clone and yarn install at most once a month.
+      #
+      # The bench lives OUTSIDE the checkout: fpm stages the whole checkout into
+      # <bench>/apps/frappe_ai, and a bench inside it would be copied into itself.
+      - name: Locate the build bench
+        id: bench
         run: |
-          bench new-site test_site.local \
-            --mariadb-root-password travis \
-            --admin-password admin \
-            --mariadb-user-host-login-scope='%'
+          echo "BUILD_BENCH=$HOME/build-bench" >> "$GITHUB_ENV"
+          echo "ym=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
 
-      - name: Install app on test site
-        working-directory: frappe-bench
-        run: bench --site test_site.local install-app frappe_ai
+      - name: Restore Frappe asset pipeline
+        id: frappe-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BUILD_BENCH }}/apps/frappe
+          key: frappe-assets-${{ env.FRAPPE_REF }}-${{ steps.bench.outputs.ym }}
 
-      - name: Build frontend bundle
-        working-directory: frappe-bench
-        run: bench build --app frappe_ai
+      - name: Prepare Frappe asset pipeline
+        if: steps.frappe-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$BUILD_BENCH/apps"
+          git clone --depth 1 --branch "$FRAPPE_REF" https://github.com/frappe/frappe.git "$BUILD_BENCH/apps/frappe"
+          ( cd "$BUILD_BENCH/apps/frappe" && yarn install --frozen-lockfile --network-timeout 600000 )
 
-      - name: Run unit tests
-        working-directory: frappe-bench
-        run: bench --site test_site.local run-tests --app frappe_ai
+      - name: Lay out the build bench
+        run: |
+          mkdir -p "$BUILD_BENCH/sites"
+          echo frappe > "$BUILD_BENCH/sites/apps.txt"
+
+      # Both architectures are vendored in full: the Vyogo pools run amd64 and arm64
+      # nodes, and a bench installs the package offline, so a missing wheel is a failed
+      # install, not a slow one.
+      - name: Build the package
+        id: build
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p dist
+          ./bin/fpm package . \
+            --org "$ORG" --app-name "$APP" \
+            --version "$VERSION" \
+            --python-version "$BENCH_PYTHON" \
+            --platform manylinux2014_x86_64 --platform manylinux2014_aarch64 \
+            --bench-path "$BUILD_BENCH" \
+            --skip-local-install --overwrite \
+            --output-path dist
+          set -- dist/*.fpm
+          [ -f "$1" ] || { echo "::error::no .fpm produced"; exit 1; }
+          echo "file=$(basename "$1")" >> "$GITHUB_OUTPUT"
+          ls -la dist
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fpm-package
+          path: dist/*.fpm
+          if-no-files-found: error
+          retention-days: 14
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Tier 3 — the package in a real bench. ~3–5 min. `fpm install` puts the
+  # package into a fresh SNE bench exactly as a pool would, offline from its
+  # vendored wheels, and the site must then list the app and serve its
+  # compiled bundle. A package that fails here never reaches the registry.
+  # (A prod package carries no test modules, so the suite is `test`'s job.)
+  # ──────────────────────────────────────────────────────────────────────
+  verify:
+    name: Install the package into SNE
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: package
+
+    steps:
+      - name: Download package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fpm-package
+          path: dist
+
+      - name: Obtain FPM CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tmp="$(mktemp -d)"
+          gh release download "$FPM_VERSION" --repo vyogotech/fpm \
+            --pattern 'fpm-linux-amd64' --pattern 'fpm-linux-amd64.sha256' --dir "$tmp"
+          ( cd "$tmp" && sha256sum -c fpm-linux-amd64.sha256 )
+          mkdir -p bin
+          install -m 0755 "$tmp/fpm-linux-amd64" bin/fpm
+          rm -rf "$tmp"
+
+      - name: Start the SNE bench
+        run: |
+          docker run -d --name sne -p 8000:8000 "$SNE_IMAGE"
+          for _ in $(seq 1 60); do
+            curl -fsS -o /dev/null -H 'Host: dev.localhost' http://localhost:8000/api/method/ping && exit 0
+            sleep 5
+          done
+          echo "::error::SNE site never came up"; docker logs --tail 80 sne; exit 1
+
+      - name: fpm install
+        env:
+          FILE: ${{ needs.package.outputs.file }}
+        run: |
+          docker cp bin/fpm sne:/tmp/fpm
+          docker cp "dist/$FILE" sne:/tmp/package.fpm
+          docker exec -u 0 sne chown 1001 /tmp/fpm /tmp/package.fpm
+          docker exec -w /home/frappe/frappe-bench sne /tmp/fpm install /tmp/package.fpm \
+            --bench-path /home/frappe/frappe-bench --site dev.localhost --skip-required-apps-check
+
+      # fpm says it after every install: running web and worker processes load an app
+      # when they start. A restart of the container is the SNE's `bench restart`; the
+      # database and the site survive it, and its run script re-registers the app.
+      - name: Restart the bench so the web workers load the app
+        run: |
+          docker restart sne
+          for _ in $(seq 1 60); do
+            curl -fsS -o /dev/null -H 'Host: dev.localhost' http://localhost:8000/api/method/ping && exit 0
+            sleep 5
+          done
+          echo "::error::SNE site did not come back after restart"; docker logs --tail 80 sne; exit 1
+
+      - name: The app is installed and its bundle is served
+        run: |
+          docker exec -w /home/frappe/frappe-bench sne bench --site dev.localhost list-apps | grep -w "$APP"
+          docker exec -w /home/frappe/frappe-bench sne sh -c "ls sites/assets/$APP/dist/js/*.bundle.*.js"
+          docker exec -w /home/frappe/frappe-bench sne sh -c "grep -q '\"$APP.bundle.js\"' sites/assets/assets.json"
+          bundle="$(docker exec -w /home/frappe/frappe-bench sne python3 -c "import json;print(json.load(open('sites/assets/assets.json'))['$APP.bundle.js'])")"
+          curl -fsS -o /dev/null -H 'Host: dev.localhost' "http://localhost:8000$bundle"
+
+      - name: Bench logs on failure
+        if: failure()
+        run: |
+          docker logs --tail 200 sne || true
+          docker exec -w /home/frappe/frappe-bench sne sh -c 'tail -n 200 logs/*.log' || true
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Tier 4 — publish. Only a verified package, and only from main, a tag,
+  # or an explicit dispatch.
+  # ──────────────────────────────────────────────────────────────────────
+  publish:
+    name: Publish to the FPM registry
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [package, verify, test]
+    if: >-
+      github.ref_type == 'tag' ||
+      (github.event_name == 'push' && github.ref_name == 'main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish)
+
+    steps:
+      - name: Download package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fpm-package
+          path: dist
+
+      - name: Obtain FPM CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tmp="$(mktemp -d)"
+          gh release download "$FPM_VERSION" --repo vyogotech/fpm \
+            --pattern 'fpm-linux-amd64' --pattern 'fpm-linux-amd64.sha256' --dir "$tmp"
+          ( cd "$tmp" && sha256sum -c fpm-linux-amd64.sha256 )
+          mkdir -p bin
+          install -m 0755 "$tmp/fpm-linux-amd64" bin/fpm
+          rm -rf "$tmp"
+
+      - name: Publish
+        env:
+          VERSION: ${{ needs.package.outputs.version }}
+          KIND: ${{ needs.package.outputs.kind }}
+          FILE: ${{ needs.package.outputs.file }}
+          REGISTRY_USER: ${{ vars.FPM_REGISTRY_USERNAME || github.actor }}
+          # fpm reads the password for repository <name> from FPM_REPO_<NAME>_PASSWORD.
+          FPM_REPO_GHCR_PASSWORD: ${{ secrets.FPM_REGISTRY_PASSWORD || secrets.GITHUB_TOKEN }}
+        run: |
+          ./bin/fpm repo add ghcr "$FPM_OCI_REPOSITORY" --type oci --username "$REGISTRY_USER"
+          ./bin/fpm publish --from-file "dist/$FILE" --repo ghcr
+          ./bin/fpm exists "$ORG/$APP==$VERSION" --remote
+          {
+            echo "### Published \`$ORG/$APP==$VERSION\` ($KIND)"
+            echo
+            echo "Registry: \`$FPM_OCI_REPOSITORY\`"
+            echo
+            echo '```bash'
+            echo "fpm repo add ghcr $FPM_OCI_REPOSITORY --type oci"
+            echo "fpm install $ORG/$APP==$VERSION --bench-path <bench> --site <site>"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
