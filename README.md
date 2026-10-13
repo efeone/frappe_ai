@@ -31,6 +31,13 @@ Then set the agent URL in `sites/your-site/site_config.json`:
 
 And open `/app/ai-assistant-settings` to toggle **Enabled**.
 
+Or install the released package with [FPM](https://github.com/vyogotech/fpm), which ships the compiled desk bundle and needs no build step on the bench:
+
+```bash
+fpm repo add ghcr ghcr.io/vyogotech/fpm --type oci
+fpm install vyogotech/frappe_ai --bench-path /path/to/bench --site your-site
+```
+
 See [QUICKSTART.md](QUICKSTART.md) for a 5-minute walkthrough or [INSTALLATION.md](INSTALLATION.md) for the full guide.
 
 ## Connect to FrappeForge

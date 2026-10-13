@@ -32,6 +32,17 @@ bench restart
 
 `install.py:after_install` creates the **AI Assistant Settings** singleton on first install. The same logic runs in `after_migrate` so the singleton survives migrations.
 
+### Alternative: install the FPM package
+
+Every tagged release, and a snapshot of every push to `main`, is published as an [FPM](https://github.com/vyogotech/fpm) package in the Vyogo registry on GHCR. The package carries the compiled desk bundle and its Python dependencies, so a bench installs it without Node or network access to PyPI:
+
+```bash
+fpm repo add ghcr ghcr.io/vyogotech/fpm --type oci
+fpm install vyogotech/frappe_ai --bench-path /path/to/bench --site your-site.local
+```
+
+Pin a version with `vyogotech/frappe_ai==X.Y.Z`. Snapshots are prereleases (`X.Y.Z-git.<date>.<sha>`), so an unpinned install always resolves to the latest tagged release. The FPM route replaces Steps 1 and 2; continue from Step 3.
+
 ## Step 3: Set the agent URL
 
 The agent URL is read from `site_config.json` — it's intentionally not a doctype field, so it stays per-environment and can't be edited from the desk UI.
