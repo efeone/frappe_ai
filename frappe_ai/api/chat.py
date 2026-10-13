@@ -19,6 +19,20 @@ def _agent_url() -> str:
 	return frappe.local.conf.get("frappe_ai_agent_url", "").rstrip("/")
 
 
+def _bench_url() -> str:
+	"""The URL where the agent and MCP server can reach this bench."""
+	configured = frappe.local.conf.get("frappe_ai_bench_url")
+	if configured:
+		return str(configured).rstrip("/")
+	try:
+		url = frappe.utils.get_url()
+		if url:
+			return url.rstrip("/")
+	except Exception:
+		pass
+	return ""
+
+
 def _message_max_chars() -> int:
 	raw = frappe.local.conf.get("frappe_ai_message_max_chars")
 	if raw is None:
@@ -384,6 +398,9 @@ def _stream_to_agent(
 	site_name = getattr(getattr(frappe, "local", None), "site", None)
 	if site_name:
 		headers["X-Frappe-Site-Name"] = site_name
+	bench_url = _bench_url()
+	if bench_url:
+		headers["X-Frappe-Bench-URL"] = bench_url
 
 	try:
 		with requests.post(

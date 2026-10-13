@@ -208,6 +208,26 @@ class TestAgentUrl(unittest.TestCase):
 		self.assertEqual(chat._agent_url(), "http://localhost:8484")
 
 
+class TestBenchUrl(unittest.TestCase):
+	def setUp(self):
+		self._original = frappe.local.conf.get("frappe_ai_bench_url")
+
+	def tearDown(self):
+		if self._original is None:
+			frappe.local.conf.pop("frappe_ai_bench_url", None)
+		else:
+			frappe.local.conf["frappe_ai_bench_url"] = self._original
+
+	def test_configured_bench_url(self):
+		frappe.local.conf["frappe_ai_bench_url"] = "http://erpnext:8000/"
+		self.assertEqual(chat._bench_url(), "http://erpnext:8000")
+
+	def test_fallback_to_get_url(self):
+		frappe.local.conf.pop("frappe_ai_bench_url", None)
+		with patch("frappe.utils.get_url", return_value="http://site.local:8000/"):
+			self.assertEqual(chat._bench_url(), "http://site.local:8000")
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # start_stream — whitelisted endpoint. Mocks frappe.enqueue.
 # ──────────────────────────────────────────────────────────────────────────

@@ -37,6 +37,10 @@ def test_connection():
 		site_name = getattr(getattr(frappe, "local", None), "site", None)
 		if site_name:
 			headers["X-Frappe-Site-Name"] = site_name
+		from frappe_ai.api.chat import _bench_url
+		bench_url = _bench_url()
+		if bench_url:
+			headers["X-Frappe-Bench-URL"] = bench_url
 
 		health_response = requests.get(
 			f"{agent_url}/health",
