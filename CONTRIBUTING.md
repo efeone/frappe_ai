@@ -1,4 +1,4 @@
-# Contributing to Frappe AI
+# Contributing to AI Sidebar
 
 A short, opinionated guide. The goal: someone unfamiliar can land a clean PR in an hour.
 

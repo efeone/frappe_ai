@@ -9,7 +9,7 @@ const props = defineProps<{ message: Message }>();
 const renderError = ref(false);
 
 onErrorCaptured((err) => {
-	console.error("[Frappe AI] Block render error:", err);
+	console.error("[AI Sidebar] Block render error:", err);
 	renderError.value = true;
 	return false;
 });

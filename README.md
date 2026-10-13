@@ -1,8 +1,8 @@
-# Frappe AI
+# AI Sidebar
 
 [![CI](https://github.com/vyogotech/frappe_ai/actions/workflows/ci.yml/badge.svg)](https://github.com/vyogotech/frappe_ai/actions/workflows/ci.yml)
 
-An in-desk AI assistant for Frappe/ERPNext. Streams responses from a configured AI agent over HTTP and renders markdown prose plus structured KPI / chart / table blocks in a chat sidebar.
+**AI Sidebar** by [Vyogo Technologies](https://vyogo.com) is an in-desk AI assistant for Frappe and ERPNext. It streams answers from the Vyogo AI agent over HTTP and renders markdown prose plus structured KPI / chart / table blocks in a chat sidebar. The repository and Frappe app module are named `frappe_ai`.
 
 ## Features
 

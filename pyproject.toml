@@ -1,9 +1,9 @@
 [project]
 name = "frappe_ai"
 authors = [
-    { name = "Vyogo", email = "developers@vyogo.com"}
+    { name = "Vyogo Technologies", email = "developers@vyogo.com"}
 ]
-description = "In-desk AI assistant for Frappe/ERPNext — streams responses from a configured AI agent into a chat sidebar."
+description = "AI Sidebar for Frappe and ERPNext by Vyogo Technologies: a chat sidebar in the Desk that streams answers from the Vyogo AI agent, grounded in the page the user is on."
 requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]

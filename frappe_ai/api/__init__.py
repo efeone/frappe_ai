@@ -1,4 +1,4 @@
-"""Public API for the Frappe AI frontend."""
+"""Public API for the AI Sidebar frontend."""
 
 import frappe
 

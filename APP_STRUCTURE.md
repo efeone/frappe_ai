@@ -1,4 +1,4 @@
-# Frappe AI — App Structure
+# AI Sidebar — App Structure
 
 A map of the codebase: what each file does, how the runtime pieces fit together, and where to make common changes.
 

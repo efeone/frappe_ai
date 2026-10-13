@@ -2,7 +2,7 @@
   "name": "frappe_ai",
   "version": "1.0.0",
   "private": true,
-  "description": "Runtime deps for the frappe_ai bundle (resolved by Frappe's esbuild).",
+  "description": "Runtime deps for the AI Sidebar bundle (resolved by Frappe's esbuild).",
   "scripts": {
     "type-check": "tsc --noEmit",
     "test": "vitest run",

@@ -5,7 +5,7 @@ import ChatHeader from "./ChatHeader.vue";
 describe("ChatHeader", () => {
   it("renders the app title and two icon buttons", () => {
     const wrapper = mount(ChatHeader);
-    expect(wrapper.text()).toContain("Frappe AI");
+    expect(wrapper.text()).toContain("AI Sidebar");
     const buttons = wrapper.findAll("button.frappe-ai-icon-btn");
     expect(buttons).toHaveLength(2);
   });

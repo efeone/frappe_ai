@@ -10,7 +10,7 @@ const emit = defineEmits<{
 <template>
 	<div class="frappe-ai-header">
 		<div class="frappe-ai-header-left">
-			<span class="frappe-ai-header-title">Frappe AI</span>
+			<span class="frappe-ai-header-title">AI Sidebar</span>
 		</div>
 		<div class="frappe-ai-header-actions">
 			<button

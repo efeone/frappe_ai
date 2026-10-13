@@ -389,7 +389,7 @@ export function useChat() {
         }));
     } catch (err) {
       // Swallow — restoring history is a nice-to-have, not a blocker.
-      console.warn("[Frappe AI] loadRecentConversation failed", err);
+      console.warn("[AI Sidebar] loadRecentConversation failed", err);
     }
   }
 

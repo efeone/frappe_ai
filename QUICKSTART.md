@@ -1,4 +1,4 @@
-# Frappe AI — Quick Start
+# AI Sidebar — Quick Start
 
 Up and running in 5 minutes.
 

@@ -1,4 +1,4 @@
-/** Load Frappe AI Settings from the backend. Module-level singleton. */
+/** Load AI Sidebar settings from the backend. Module-level singleton. */
 
 import { ref, readonly, type Ref } from "vue";
 
