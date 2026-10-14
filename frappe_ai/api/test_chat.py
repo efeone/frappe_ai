@@ -87,28 +87,19 @@ class TestSanitizePageContext(unittest.TestCase):
 
 
 class TestValidateAgentUrl(unittest.TestCase):
-	def setUp(self):
-		self._original_escape = frappe.local.conf.get("frappe_ai_agent_url_unsafe_ok")
-		frappe.local.conf["frappe_ai_agent_url_unsafe_ok"] = 0
-
-	def tearDown(self):
-		if self._original_escape is None:
-			frappe.local.conf.pop("frappe_ai_agent_url_unsafe_ok", None)
-		else:
-			frappe.local.conf["frappe_ai_agent_url_unsafe_ok"] = self._original_escape
-
 	def test_accepts_https_url(self):
 		chat._validate_agent_url("https://agent.example.com")
 
 	def test_accepts_http_url(self):
 		chat._validate_agent_url("http://agent.example.com:8484")
 
-	def test_accepts_localhost_with_escape(self):
-		# Localhost is technically a private name; allow it when the
-		# escape hatch is set (local dev).
-		frappe.local.conf["frappe_ai_agent_url_unsafe_ok"] = 1
+	def test_accepts_localhost(self):
 		chat._validate_agent_url("http://localhost:8484")
 		chat._validate_agent_url("http://127.0.0.1:8484")
+
+	def test_accepts_ip_literal(self):
+		chat._validate_agent_url("http://1.1.1.1:8484")
+		chat._validate_agent_url("http://10.0.0.5:8484")
 
 	def test_rejects_non_http_scheme(self):
 		with self.assertRaises(frappe.ValidationError):
@@ -123,62 +114,6 @@ class TestValidateAgentUrl(unittest.TestCase):
 	def test_rejects_missing_host(self):
 		with self.assertRaises(frappe.ValidationError):
 			chat._validate_agent_url("http://")
-
-	def test_rejects_cloud_metadata_endpoints(self):
-		# AWS / GCE / Azure IMDS — classic SSRF target.
-		with self.assertRaises(frappe.ValidationError):
-			chat._validate_agent_url("http://169.254.169.254/latest/meta-data/")
-		with self.assertRaises(frappe.ValidationError):
-			chat._validate_agent_url("http://metadata.google.internal/computeMetadata/")
-
-	def test_rejects_unspecified_address(self):
-		with self.assertRaises(frappe.ValidationError):
-			chat._validate_agent_url("http://0.0.0.0:8484")
-
-	def test_escape_hatch_allows_metadata_too(self):
-		# Operators who genuinely need internal-network targets opt-in
-		# via site_config. We don't second-guess them.
-		frappe.local.conf["frappe_ai_agent_url_unsafe_ok"] = 1
-		chat._validate_agent_url("http://169.254.169.254/")
-
-	def test_rejects_rfc1918_private_addresses(self):
-		# The worker forwards the user's sid; a misconfigured agent URL on a
-		# private range would silently leak the session to whatever happens
-		# to be listening there.
-		for url in (
-			"http://10.0.0.5:8484",
-			"http://172.16.0.5:8484",
-			"http://192.168.1.5:8484",
-		):
-			with self.assertRaises(frappe.ValidationError, msg=f"should reject {url}"):
-				chat._validate_agent_url(url)
-
-	def test_rejects_loopback_without_escape(self):
-		# Loopback only makes sense in local dev, gated behind the escape
-		# hatch. Without it, a typo pointing at 127.0.0.1 is a sid leak.
-		with self.assertRaises(frappe.ValidationError):
-			chat._validate_agent_url("http://127.0.0.1:8484")
-		with self.assertRaises(frappe.ValidationError):
-			chat._validate_agent_url("http://127.0.0.5:8484")
-
-	def test_rejects_non_imds_link_local(self):
-		# 169.254.0.0/16 outside the IMDS literal — still link-local, still
-		# rejected.
-		with self.assertRaises(frappe.ValidationError):
-			chat._validate_agent_url("http://169.254.1.1:8484")
-
-	def test_rejects_ipv6_loopback_and_ula_without_escape(self):
-		# IPv6 loopback (::1) and Unique Local Addresses (fc00::/7) are
-		# private; cover them explicitly so an IPv6-first deployment can't
-		# regress the IPv4-only guard.
-		with self.assertRaises(frappe.ValidationError):
-			chat._validate_agent_url("http://[::1]:8484")
-		with self.assertRaises(frappe.ValidationError):
-			chat._validate_agent_url("http://[fd00::1]:8484")
-
-	def test_accepts_public_ip_literal(self):
-		# Sanity: a publicly-allocated IPv4 (Cloudflare DNS) is fine.
-		chat._validate_agent_url("http://1.1.1.1:8484")
 
 
 class TestAgentUrl(unittest.TestCase):
@@ -238,13 +173,6 @@ class TestStartStream(unittest.TestCase):
 		# Establish a known-good baseline for the singleton + site_config.
 		self._original_url = frappe.local.conf.get("frappe_ai_agent_url")
 		frappe.local.conf["frappe_ai_agent_url"] = "http://localhost:8484"
-		# _validate_agent_url rejects loopback (::1, 127.0.0.0/8) outside
-		# the explicit escape hatch. These tests use a localhost URL and
-		# mock frappe.enqueue, so the URL is only validated, never reached.
-		# Setting the hatch keeps validation permissive without changing
-		# what the tests actually exercise.
-		self._original_escape = frappe.local.conf.get("frappe_ai_agent_url_unsafe_ok")
-		frappe.local.conf["frappe_ai_agent_url_unsafe_ok"] = 1
 
 		self.settings = frappe.get_single("AI Assistant Settings")
 		self._original_enabled = self.settings.enabled
@@ -259,10 +187,6 @@ class TestStartStream(unittest.TestCase):
 			frappe.local.conf.pop("frappe_ai_agent_url", None)
 		else:
 			frappe.local.conf["frappe_ai_agent_url"] = self._original_url
-		if self._original_escape is None:
-			frappe.local.conf.pop("frappe_ai_agent_url_unsafe_ok", None)
-		else:
-			frappe.local.conf["frappe_ai_agent_url_unsafe_ok"] = self._original_escape
 
 	def test_empty_message_throws(self):
 		with self.assertRaises(frappe.ValidationError):

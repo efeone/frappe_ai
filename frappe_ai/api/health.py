@@ -4,7 +4,7 @@ import frappe
 import requests
 from frappe import _
 
-from frappe_ai.api.chat import _validate_agent_url
+from frappe_ai.api.chat import _bench_url, _validate_agent_url
 
 
 def _agent_url() -> str:
@@ -37,7 +37,6 @@ def test_connection():
 		site_name = getattr(getattr(frappe, "local", None), "site", None)
 		if site_name:
 			headers["X-Frappe-Site-Name"] = site_name
-		from frappe_ai.api.chat import _bench_url
 		bench_url = _bench_url()
 		if bench_url:
 			headers["X-Frappe-Bench-URL"] = bench_url

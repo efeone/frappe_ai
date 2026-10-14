@@ -62,12 +62,11 @@ The AI Assistant Settings form shows this value in a read-only **Agent URL** fie
 
 Nothing more is needed on a bench that hosts several sites: every request the app makes to the agent names the site it came from, and the agent only accepts the user's session for that site. Each site carries its own `frappe_ai_agent_url`, so sites on one bench may share an agent or use different ones.
 
-The app refuses an agent URL that resolves to a private or loopback address, because it forwards the user's session cookie there. When the agent is genuinely internal, such as a Kubernetes ClusterIP service or a local container, add the opt-out beside the URL:
+Internal addresses (such as a Kubernetes ClusterIP service or a local container) can be configured directly as the `frappe_ai_agent_url`:
 
 ```json
 {
-  "frappe_ai_agent_url": "http://frappe-ai-agent.ai.svc.cluster.local:8484",
-  "frappe_ai_agent_url_unsafe_ok": 1
+  "frappe_ai_agent_url": "http://frappe-ai-agent.ai.svc.cluster.local:8484"
 }
 ```
 

@@ -1,6 +1,4 @@
-import ipaddress
 import json
-import socket
 import uuid
 from urllib.parse import urlparse
 
@@ -45,79 +43,16 @@ def _message_max_chars() -> int:
 
 
 def _validate_agent_url(url: str) -> None:
-	"""Refuse agent URLs that look misconfigured or unsafe.
+	"""Validate agent URL structure.
 
-	The worker forwards the user's `sid` cookie to whatever this URL
-	resolves to, so an operator typo pointing at the cloud metadata
-	endpoint or an internal loopback service would leak the session.
-
-	Hard rules (always enforced):
-	  - Must parse as an absolute http(s) URL with a host.
-
-	Soft rules (skipped when site_config has `frappe_ai_agent_url_unsafe_ok`):
-	  - Must not target the cloud metadata names (169.254.169.254,
-	    fd00:ec2::254, metadata.google.internal).
-	  - Every address the host resolves to must be `is_global`. Rejects
-	    RFC1918 private (10/8, 172.16/12, 192.168/16), loopback,
-	    link-local, multicast, reserved, unspecified, shared (CGNAT), and
-	    benchmarking ranges in one check — so an internal-hostname like
-	    `internal-svc:8080` cannot exfiltrate the sid.
-
-	The "unsafe_ok" escape hatch exists because local dev legitimately
-	targets http://host.docker.internal:NNNN or http://127.0.0.1:NNNN,
-	which would otherwise trip the private-network check.
+	Egress network security and IP routing are platform concerns managed
+	via network policies and infrastructure firewalls.
 	"""
 	parsed = urlparse(url)
 	if parsed.scheme not in ("http", "https"):
 		frappe.throw(_("AI agent URL must use http or https (got '{0}').").format(parsed.scheme or "(none)"))
 	if not parsed.hostname:
 		frappe.throw(_("AI agent URL must include a hostname."))
-
-	if frappe.local.conf.get("frappe_ai_agent_url_unsafe_ok"):
-		return
-
-	host = parsed.hostname  # str (guaranteed by the earlier `not parsed.hostname` check)
-	assert host is not None  # narrow for the type checker
-	# Block the IMDS endpoints used to escalate inside AWS / GCP / Azure.
-	# is_global also catches the IPv4 IMDS (link-local), but the explicit
-	# match gives operators a clearer error than "non-public address".
-	if host in ("169.254.169.254", "fd00:ec2::254", "metadata.google.internal"):
-		frappe.throw(_("AI agent URL targets a cloud metadata endpoint, which is not allowed."))
-
-	# Collect every IP the host could resolve to. For IP literals there is
-	# exactly one; for hostnames we ask the resolver and check each entry,
-	# because round-robin DNS or AAAA records can mix public and private
-	# addresses.
-	candidate_ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
-	try:
-		candidate_ips.append(ipaddress.ip_address(host))
-	except ValueError:
-		# host is a name. Resolve it. A DNS failure is not on its own a
-		# sid-leak risk — let the actual outbound request surface the
-		# resolution error rather than masking it as a validation throw.
-		try:
-			port = parsed.port or (443 if parsed.scheme == "https" else 80)
-			infos = socket.getaddrinfo(host, port)
-		except socket.gaierror:
-			return
-		for info in infos:
-			try:
-				candidate_ips.append(ipaddress.ip_address(info[4][0]))
-			except (ValueError, IndexError):
-				continue
-
-	for ip in candidate_ips:
-		# is_global is True iff the address is allocated for public networks.
-		# Catches loopback, link-local, RFC1918 private (and IPv6 ULA),
-		# multicast, reserved, unspecified, shared (CGNAT), benchmarking,
-		# and IETF-future ranges in a single check.
-		if not ip.is_global:
-			frappe.throw(
-				_(
-					"AI agent URL resolves to a non-public address ({0}). "
-					"Set frappe_ai_agent_url_unsafe_ok in site_config.json for local development."
-				).format(ip)
-			)
 
 
 _CANCEL_KEY_PREFIX = "frappe_ai:cancel:"
