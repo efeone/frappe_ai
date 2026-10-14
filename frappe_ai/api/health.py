@@ -41,21 +41,26 @@ def test_connection():
 		if bench_url:
 			headers["X-Frappe-Bench-URL"] = bench_url
 
-		req_kwargs = {
-			"cookies": {"sid": frappe.session.sid},
-			"headers": headers or None,
-			"timeout": 10,
-		}
 		verify_ssl = _agent_ssl_verify()
-		if verify_ssl is not None:
-			req_kwargs["verify"] = verify_ssl
-			if verify_ssl is False:
-				import urllib3
+		if verify_ssl is False:
+			import urllib3
 
-				urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-		health_response = requests.get(
-			f"{agent_url}/health",
-			**req_kwargs,
+			urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+		health_response = (
+			requests.get(
+				f"{agent_url}/health",
+				cookies={"sid": frappe.session.sid},
+				headers=headers or None,
+				timeout=10,
+				verify=verify_ssl,
+			)
+			if verify_ssl is not None
+			else requests.get(
+				f"{agent_url}/health",
+				cookies={"sid": frappe.session.sid},
+				headers=headers or None,
+				timeout=10,
+			)
 		)
 
 		if health_response.status_code == 200:

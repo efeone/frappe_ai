@@ -363,24 +363,32 @@ def _stream_to_agent(
 		headers["X-Frappe-Bench-URL"] = bench_url
 
 	try:
-		post_kwargs = {
-			"json": payload,
-			"cookies": {"sid": sid},
-			"headers": headers,
-			"timeout": timeout_seconds,
-			"stream": True,
-		}
 		verify_ssl = _agent_ssl_verify()
-		if verify_ssl is not None:
-			post_kwargs["verify"] = verify_ssl
-			if verify_ssl is False:
-				import urllib3
+		if verify_ssl is False:
+			import urllib3
 
-				urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-		with requests.post(
-			f"{agent_url}/api/v1/chat",
-			**post_kwargs,
-		) as response:
+			urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+		post_call = (
+			requests.post(
+				f"{agent_url}/api/v1/chat",
+				json=payload,
+				cookies={"sid": sid},
+				headers=headers,
+				timeout=timeout_seconds,
+				stream=True,
+				verify=verify_ssl,
+			)
+			if verify_ssl is not None
+			else requests.post(
+				f"{agent_url}/api/v1/chat",
+				json=payload,
+				cookies={"sid": sid},
+				headers=headers,
+				timeout=timeout_seconds,
+				stream=True,
+			)
+		)
+		with post_call as response:
 			response.raise_for_status()
 
 			for line in response.iter_lines(decode_unicode=True):
