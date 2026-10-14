@@ -66,6 +66,23 @@ class TestHealthEndpoint(unittest.TestCase):
 		self.assertNotIn("verify", kwargs)
 
 	@patch("requests.get")
+	def test_ssl_verify_disabled(self, mock_get):
+		frappe.local.conf["frappe_ai_agent_ssl_verify"] = False
+		try:
+			mock_response = MagicMock()
+			mock_response.status_code = 200
+			mock_response.text = '{"status":"ok","build":"abc123"}'
+			mock_response.json.return_value = {"status": "ok", "build": "abc123"}
+			mock_get.return_value = mock_response
+
+			out = health.test_connection()
+			self.assertTrue(out["success"])
+			_, kwargs = mock_get.call_args
+			self.assertEqual(kwargs.get("verify"), False)
+		finally:
+			frappe.local.conf.pop("frappe_ai_agent_ssl_verify", None)
+
+	@patch("requests.get")
 	def test_non_200_returns_failure(self, mock_get):
 		mock_response = MagicMock()
 		mock_response.status_code = 503

@@ -116,6 +116,38 @@ class TestValidateAgentUrl(unittest.TestCase):
 			chat._validate_agent_url("http://")
 
 
+class TestAgentSslVerify(unittest.TestCase):
+	def setUp(self):
+		self._original = frappe.local.conf.get("frappe_ai_agent_ssl_verify")
+
+	def tearDown(self):
+		if self._original is None:
+			frappe.local.conf.pop("frappe_ai_agent_ssl_verify", None)
+		else:
+			frappe.local.conf["frappe_ai_agent_ssl_verify"] = self._original
+
+	def test_none_when_unset(self):
+		frappe.local.conf.pop("frappe_ai_agent_ssl_verify", None)
+		self.assertIsNone(chat._agent_ssl_verify())
+
+	def test_false_boolean(self):
+		frappe.local.conf["frappe_ai_agent_ssl_verify"] = False
+		self.assertIs(chat._agent_ssl_verify(), False)
+
+	def test_false_strings(self):
+		for s in ("false", "0", "no"):
+			frappe.local.conf["frappe_ai_agent_ssl_verify"] = s
+			self.assertIs(chat._agent_ssl_verify(), False)
+
+	def test_true_boolean(self):
+		frappe.local.conf["frappe_ai_agent_ssl_verify"] = True
+		self.assertIs(chat._agent_ssl_verify(), True)
+
+	def test_custom_ca_path(self):
+		frappe.local.conf["frappe_ai_agent_ssl_verify"] = "/etc/ssl/custom.pem"
+		self.assertEqual(chat._agent_ssl_verify(), "/etc/ssl/custom.pem")
+
+
 class TestAgentUrl(unittest.TestCase):
 	def setUp(self):
 		self._original = frappe.local.conf.get("frappe_ai_agent_url")

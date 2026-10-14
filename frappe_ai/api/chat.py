@@ -19,7 +19,8 @@ def _agent_ssl_verify():
 	Configured per-site via `frappe_ai_agent_ssl_verify` in site_config.json:
 	- False: disable SSL verification (for private internal cluster certificates)
 	- Path string: path to custom CA bundle file
-	- True / None (default): standard CA verification
+	- True: force standard CA verification
+	- None (default): do not pass verify override so requests uses its default / REQUESTS_CA_BUNDLE
 	"""
 	conf = getattr(frappe, "local", None) and getattr(frappe.local, "conf", None)
 	if conf:
@@ -28,9 +29,13 @@ def _agent_ssl_verify():
 			return False
 		if isinstance(val, str) and val.lower() in ("false", "0", "no"):
 			return False
+		if val is True:
+			return True
+		if isinstance(val, str) and val.lower() in ("true", "1", "yes"):
+			return True
 		if isinstance(val, str) and val:
 			return val
-	return True
+	return None
 
 
 def _agent_url() -> str:
@@ -358,19 +363,23 @@ def _stream_to_agent(
 		headers["X-Frappe-Bench-URL"] = bench_url
 
 	try:
+		post_kwargs = {
+			"json": payload,
+			"cookies": {"sid": sid},
+			"headers": headers,
+			"timeout": timeout_seconds,
+			"stream": True,
+		}
 		verify_ssl = _agent_ssl_verify()
-		if verify_ssl is False:
-			import urllib3
+		if verify_ssl is not None:
+			post_kwargs["verify"] = verify_ssl
+			if verify_ssl is False:
+				import urllib3
 
-			urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+				urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 		with requests.post(
 			f"{agent_url}/api/v1/chat",
-			json=payload,
-			cookies={"sid": sid},
-			headers=headers,
-			timeout=timeout_seconds,
-			stream=True,
-			verify=verify_ssl,
+			**post_kwargs,
 		) as response:
 			response.raise_for_status()
 
