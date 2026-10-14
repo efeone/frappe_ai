@@ -4,7 +4,7 @@ import frappe
 import requests
 from frappe import _
 
-from frappe_ai.api.chat import _bench_url, _validate_agent_url
+from frappe_ai.api.chat import _agent_ssl_verify, _bench_url, _validate_agent_url
 
 
 def _agent_url() -> str:
@@ -41,11 +41,17 @@ def test_connection():
 		if bench_url:
 			headers["X-Frappe-Bench-URL"] = bench_url
 
+		verify_ssl = _agent_ssl_verify()
+		if verify_ssl is False:
+			import urllib3
+
+			urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 		health_response = requests.get(
 			f"{agent_url}/health",
 			cookies={"sid": frappe.session.sid},
 			headers=headers or None,
 			timeout=10,
+			verify=verify_ssl,
 		)
 
 		if health_response.status_code == 200:

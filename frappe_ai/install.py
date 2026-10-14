@@ -11,6 +11,8 @@ def after_install():
 
 def after_migrate():
 	_ensure_settings()
+	if frappe.db.exists("Workspace", "Frappe AI"):
+		frappe.delete_doc("Workspace", "Frappe AI", force=True, ignore_permissions=True)
 	_sync_workspace()
 	_ensure_forge_role()
 
@@ -30,7 +32,7 @@ def _ensure_settings():
 
 
 def _sync_workspace():
-	"""Force-import the Frappe AI workspace JSON so an existing install picks up
+	"""Force-import the AI Sidebar workspace JSON so an existing install picks up
 	updates to the workspace content blob on every migrate.
 
 	Frappe's normal sync (`bench migrate`) installs a workspace from JSON only
@@ -46,7 +48,7 @@ def _sync_workspace():
 	on every migrate is safe.
 	"""
 	app_path = frappe.get_app_path("frappe_ai")
-	workspace_path = os.path.join(app_path, "ai_assistant", "workspace", "Frappe AI", "Frappe AI.json")
+	workspace_path = os.path.join(app_path, "ai_assistant", "workspace", "AI Sidebar", "AI Sidebar.json")
 	if not os.path.exists(workspace_path):
 		return
 	try:

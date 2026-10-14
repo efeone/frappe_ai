@@ -13,6 +13,26 @@ from frappe import _
 _DEFAULT_MESSAGE_MAX_CHARS = 10_000
 
 
+def _agent_ssl_verify():
+	"""Return SSL verification parameter for outbound requests to the AI agent.
+
+	Configured per-site via `frappe_ai_agent_ssl_verify` in site_config.json:
+	- False: disable SSL verification (for private internal cluster certificates)
+	- Path string: path to custom CA bundle file
+	- True / None (default): standard CA verification
+	"""
+	conf = getattr(frappe, "local", None) and getattr(frappe.local, "conf", None)
+	if conf:
+		val = conf.get("frappe_ai_agent_ssl_verify")
+		if val is False:
+			return False
+		if isinstance(val, str) and val.lower() in ("false", "0", "no"):
+			return False
+		if isinstance(val, str) and val:
+			return val
+	return True
+
+
 def _agent_url() -> str:
 	return frappe.local.conf.get("frappe_ai_agent_url", "").rstrip("/")
 
@@ -338,6 +358,11 @@ def _stream_to_agent(
 		headers["X-Frappe-Bench-URL"] = bench_url
 
 	try:
+		verify_ssl = _agent_ssl_verify()
+		if verify_ssl is False:
+			import urllib3
+
+			urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 		with requests.post(
 			f"{agent_url}/api/v1/chat",
 			json=payload,
@@ -345,6 +370,7 @@ def _stream_to_agent(
 			headers=headers,
 			timeout=timeout_seconds,
 			stream=True,
+			verify=verify_ssl,
 		) as response:
 			response.raise_for_status()
 
