@@ -99,7 +99,9 @@ def enforce() -> None:
 		frappe.logger("frappe_ai.frappeforge").warning(
 			"refused %s %s for %s: %s", request.method, request.path, conn["name"], reason
 		)
-		raise frappe.PermissionError(_("Vyogo Forge AI may only read and propose changes: {0}.").format(reason))
+		raise frappe.PermissionError(
+			_("Vyogo Forge AI may only read and propose changes: {0}.").format(reason)
+		)
 	connection.touch(conn, now)
 
 

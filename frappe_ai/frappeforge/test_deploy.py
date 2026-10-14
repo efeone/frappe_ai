@@ -230,12 +230,16 @@ class TestApprove(DeployTestCase):
 			}
 		).insert()
 		out = self.propose()
-		records = json.loads(frappe.db.get_value("Vyogo Forge AI Proposed Release", out["name"], "records_json"))
+		records = json.loads(
+			frappe.db.get_value("Vyogo Forge AI Proposed Release", out["name"], "records_json")
+		)
 		self.assertEqual(next(r for r in records if r["name"] == FIELD)["action"], "Update")
 		deploy.approve(out["name"])
 		self.assertEqual(frappe.db.get_value("Custom Field", FIELD, "label"), "FF Test")
 		before = frappe.db.get_value(
-			"Vyogo Forge AI Change Log", {"proposed_release": out["name"], "target_name": FIELD}, "before_json"
+			"Vyogo Forge AI Change Log",
+			{"proposed_release": out["name"], "target_name": FIELD},
+			"before_json",
 		)
 		self.assertEqual(json.loads(before)["label"], "Changed")
 

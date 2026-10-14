@@ -55,7 +55,7 @@ class TestCreateConnection(ConnectionTestCase):
 		self.assertEqual(result["site_url"], frappe.utils.get_url())
 
 	def test_expiry_defaults_to_30_days_and_is_bounded(self):
-		result = self.make()
+		self.make()
 		expires = frappe.db.get_single_value("AI Assistant Settings", "forge_expires_on")
 		self.assertAlmostEqual((expires - now_datetime()).days, 29, delta=1)
 		for bad in (0, 366):
@@ -96,9 +96,7 @@ class TestLifecycle(ConnectionTestCase):
 	def test_revoke_disables_the_user_and_clears_its_key(self):
 		result = self.make()
 		connection.revoke(result["connection"])
-		self.assertEqual(
-			frappe.db.get_single_value("AI Assistant Settings", "forge_status"), "Revoked"
-		)
+		self.assertEqual(frappe.db.get_single_value("AI Assistant Settings", "forge_status"), "Revoked")
 		self.assertEqual(frappe.db.get_value("User", result["user"], "enabled"), 0)
 		self.assertFalse(frappe.db.get_value("User", result["user"], "api_key"))
 
@@ -114,9 +112,7 @@ class TestLifecycle(ConnectionTestCase):
 			"AI Assistant Settings", "forge_expires_on", add_to_date(now_datetime(), days=-1)
 		)
 		connection.expire_connections()
-		self.assertEqual(
-			frappe.db.get_single_value("AI Assistant Settings", "forge_status"), "Expired"
-		)
+		self.assertEqual(frappe.db.get_single_value("AI Assistant Settings", "forge_status"), "Expired")
 		self.assertEqual(frappe.db.get_value("User", result["user"], "enabled"), 0)
 
 
