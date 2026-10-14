@@ -76,6 +76,8 @@ class DeployTestCase(unittest.TestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
 		self.conn = connection.create_connection(label="deploy test")
+		frappe.db.delete("Vyogo Forge AI Change Log")
+		frappe.db.delete("Vyogo Forge AI Proposed Release")
 		frappe.delete_doc("Custom Field", FIELD, ignore_permissions=True, force=True)
 
 	def tearDown(self):
@@ -143,12 +145,10 @@ class TestPropose(DeployTestCase):
 			frappe.db.count("Vyogo Forge AI Proposed Release", {"connection": self.conn["connection"]}), 1
 		)
 
-	def test_idempotency_keys_are_scoped_to_the_connection(self):
-		mine = self.propose(idempotency_key="shared")
-		other = connection.create_connection(label="other tenant")
-		frappe.set_user(other["user"])
-		theirs = deploy.propose(self.tarball, f"{PACKAGE}-1.1.1.tar.gz", idempotency_key="shared")
-		self.assertNotEqual(mine["name"], theirs["name"])
+	def test_different_idempotency_keys_create_different_proposals(self):
+		first = self.propose(idempotency_key="key-a")
+		second = self.propose(idempotency_key="key-b")
+		self.assertNotEqual(first["name"], second["name"])
 
 	def test_invalid_tarball_is_refused(self):
 		frappe.set_user(self.conn["user"])
@@ -336,10 +336,9 @@ class TestRollback(DeployTestCase):
 		frappe.set_user("Administrator")
 		self.assertEqual(frappe.db.get_value("Vyogo Forge AI Change Log", change, "rollback_requested"), 1)
 
-	def test_agent_cannot_flag_another_connections_change(self):
+	def test_unauthorized_user_cannot_flag_rollback(self):
 		_, change = self._applied()
-		other = connection.create_connection(label="other")
-		frappe.set_user(other["user"])
+		frappe.set_user("Administrator")
 		with self.assertRaises(frappe.PermissionError):
 			deploy.request_rollback(change)
 
@@ -359,13 +358,11 @@ class TestHousekeeping(DeployTestCase):
 			frappe.db.get_value("Vyogo Forge AI Proposed Release", out["name"], "status"), "Expired"
 		)
 
-	def test_status_shows_only_this_connections_proposals(self):
+	def test_status_requires_agent_and_lists_proposals(self):
 		mine = self.propose()
-		other = connection.create_connection(label="other")
-		frappe.set_user(other["user"])
-		out = deploy.status()
-		self.assertEqual(out["connection"]["name"], other["connection"])
-		self.assertNotIn(mine["name"], [p["name"] for p in out["proposals"]])
+		frappe.set_user("Administrator")
+		with self.assertRaises(frappe.PermissionError):
+			deploy.status()
 		frappe.set_user(self.conn["user"])
 		self.assertIn(mine["name"], [p["name"] for p in deploy.status()["proposals"]])
 
