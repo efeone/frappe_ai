@@ -255,7 +255,7 @@ def parse_roles(raw: str) -> list[str]:
 def _issue_keys(user: str) -> dict:
 	doc = frappe.get_doc("User", user)
 	if not doc.api_key:
-	doc.api_key = frappe.generate_hash(length=15)
+		doc.api_key = frappe.generate_hash(length=15)
 	secret = frappe.generate_hash(length=32)
 	doc.api_secret = secret
 	doc.save(ignore_permissions=True)
