@@ -4,7 +4,21 @@
 frappe.ui.form.on('AI Assistant Settings', {
 	refresh: function(frm) {
 		if (frappe.user.has_role('System Manager') && window.frappe_ai_frappeforge) {
-			frm.add_custom_button(__('Connect to FrappeForge'), () => window.frappe_ai_frappeforge.connect());
+			if (frm.doc.forge_status === 'Active') {
+				frm.add_custom_button(__('Rotate Forge Key'), () => window.frappe_ai_frappeforge.rotate('AI Assistant Settings'), __('Vyogo Forge AI'));
+				frm.add_custom_button(__('Revoke Forge Access'), () => {
+					frappe.confirm(__('Revoke access for Vyogo Forge AI? The agent will no longer be able to connect.'), () => {
+						frappe.call({
+							method: 'frappe_ai.api.frappeforge.revoke',
+							args: { connection_name: 'AI Assistant Settings' },
+							freeze: true,
+							callback: () => frm.reload_doc()
+						});
+					});
+				}, __('Vyogo Forge AI'));
+			} else {
+				frm.add_custom_button(__('Connect to Vyogo Forge AI'), () => window.frappe_ai_frappeforge.connect(), __('Vyogo Forge AI'));
+			}
 		}
 
 		if (!frm.is_new()) {

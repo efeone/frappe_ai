@@ -1,9 +1,7 @@
 // Copyright (c) 2026, Vyogo and contributors
 // For license information, please see license.txt
 
-// The change view is rendered and escaped on the server (frappe_ai.frappeforge.deploy.render_changes_html)
-// from the tarball itself; the agent's summary is shown separately and labelled as the agent's.
-frappe.ui.form.on("FrappeForge Proposed Release", {
+frappe.ui.form.on("Vyogo Forge AI Proposed Release", {
 	refresh(frm) {
 		frm.get_field("changes_html").$wrapper.html(frm.doc.__onload?.changes_html || "");
 		const status = frm.doc.status;
@@ -23,7 +21,7 @@ frappe.ui.form.on("FrappeForge Proposed Release", {
 			)
 		).addClass("btn-primary");
 		frm.add_custom_button(__("Reject"), () =>
-			frappe.prompt({ fieldtype: "Small Text", fieldname: "reason", label: __("Reason (FrappeForge will see it)") }, (v) =>
+			frappe.prompt({ fieldtype: "Small Text", fieldname: "reason", label: __("Reason (Vyogo Forge AI will see it)") }, (v) =>
 				frappe
 					.call({ method: "frappe_ai.api.frappeforge.reject", args: { release: frm.doc.name, reason: v.reason }, freeze: true })
 					.then(() => frm.reload_doc())

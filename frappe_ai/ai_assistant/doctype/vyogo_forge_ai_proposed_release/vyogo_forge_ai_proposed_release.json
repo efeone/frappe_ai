@@ -1,6 +1,6 @@
 {
  "actions": [],
- "autoname": "format:FFR-{#####}",
+ "autoname": "format:VF-REL-{#####}",
  "creation": "2026-10-10 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -68,9 +68,8 @@
   },
   {
    "fieldname": "connection",
-   "fieldtype": "Link",
-   "label": "Connection",
-   "options": "FrappeForge Connection",
+   "fieldtype": "Data",
+   "label": "Workspace / Connection",
    "read_only": 1
   },
   {
@@ -83,7 +82,7 @@
   {
    "fieldname": "conversation_id",
    "fieldtype": "Data",
-   "label": "FrappeForge Conversation",
+   "label": "Vyogo Forge AI Conversation",
    "read_only": 1
   },
   {
@@ -104,7 +103,7 @@
    "fieldtype": "Small Text",
    "label": "Summary",
    "read_only": 1,
-   "description": "Written by the FrappeForge agent. Review the records below, not this text."
+   "description": "Written by the Vyogo Forge AI agent. Review the records below, not this text."
   },
   {
    "fieldname": "section_records",
@@ -178,7 +177,7 @@
  "modified": "2026-10-10 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Assistant",
- "name": "FrappeForge Proposed Release",
+ "name": "Vyogo Forge AI Proposed Release",
  "owner": "Administrator",
  "permissions": [
   {

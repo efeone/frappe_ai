@@ -6,17 +6,17 @@ import frappe
 def after_install():
 	_ensure_settings()
 	_sync_workspace()
-	_ensure_frappeforge_role()
+	_ensure_forge_role()
 
 
 def after_migrate():
 	_ensure_settings()
 	_sync_workspace()
-	_ensure_frappeforge_role()
+	_ensure_forge_role()
 
 
-def _ensure_frappeforge_role():
-	"""The read-only role FrappeForge agent users get (frappe_ai/frappeforge/connection.py)."""
+def _ensure_forge_role():
+	"""The read-only role Vyogo Forge AI agent users get (frappe_ai/frappeforge/connection.py)."""
 	from frappe_ai.frappeforge.connection import ensure_agent_role
 
 	ensure_agent_role()

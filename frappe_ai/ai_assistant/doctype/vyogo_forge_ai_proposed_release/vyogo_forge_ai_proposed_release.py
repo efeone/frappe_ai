@@ -4,7 +4,7 @@
 from frappe.model.document import Document
 
 
-class FrappeForgeProposedRelease(Document):
+class VyogoForgeAIProposedRelease(Document):
 	def onload(self):
 		from frappe_ai.frappeforge import deploy
 

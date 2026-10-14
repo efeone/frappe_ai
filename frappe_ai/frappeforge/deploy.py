@@ -18,8 +18,8 @@ from frappe.utils import add_to_date, get_url_to_form, now_datetime
 
 from frappe_ai.frappeforge import connection, release
 
-PROPOSAL = "FrappeForge Proposed Release"
-CHANGE_LOG = "FrappeForge Change Log"
+PROPOSAL = "Vyogo Forge AI Proposed Release"
+CHANGE_LOG = "Vyogo Forge AI Change Log"
 #: Records the agent may send alongside a package because packages cannot carry them
 #: (Package Release exports only the DocTypes linked from Module Def).
 EXTRA_DOCTYPES = {
@@ -154,7 +154,7 @@ def request_rollback(change: str) -> None:
 		frappe.throw(_("Change {0} is already rolled back.").format(change))
 	frappe.db.set_value(CHANGE_LOG, change, "rollback_requested", 1)
 	frappe.get_doc(CHANGE_LOG, change).add_comment(
-		"Comment", _("FrappeForge asked for this change to be rolled back.")
+		"Comment", _("Vyogo Forge AI asked for this change to be rolled back.")
 	)
 
 
@@ -168,9 +168,8 @@ def approve(name: str) -> dict:
 		frappe.throw(_("Proposed release {0} not found.").format(name), frappe.DoesNotExistError)
 	if row.status != "Pending":
 		frappe.throw(_("Only a pending release can be approved; this one is {0}.").format(row.status))
-	conn = frappe.db.get_value(
-		"FrappeForge Connection", row.connection, ["status", "expires_on"], as_dict=True
-	)
+	settings = frappe.get_single("AI Assistant Settings")
+	conn = {"status": settings.forge_status, "expires_on": settings.forge_expires_on}
 	if not connection.is_usable(conn, now_datetime()):
 		frappe.throw(_("The connection that proposed this release is revoked or expired."))
 	frappe.db.set_value(
@@ -221,7 +220,7 @@ def apply_release(name: str) -> None:
 		doc.db_set({"status": "Applied", "import_log": log, "error": None})
 	except Exception as exc:
 		frappe.db.rollback(save_point="frappeforge_apply")
-		frappe.log_error(title=f"FrappeForge release {name} failed")
+		frappe.log_error(title=f"Vyogo Forge AI release {name} failed")
 		doc.db_set({"status": "Failed", "error": str(exc)[:1000]})
 
 
@@ -294,9 +293,9 @@ def _caller_connection(require_usable: bool = True) -> dict:
 	user = frappe.session.user
 	conn = connection.agent_connection(user) if connection.is_agent_user(user) else None
 	if not conn:
-		raise frappe.PermissionError(_("Only a FrappeForge connection can do this."))
+		raise frappe.PermissionError(_("Only a Vyogo Forge AI connection can do this."))
 	if require_usable and not connection.is_usable(conn, now_datetime()):
-		raise frappe.PermissionError(_("This FrappeForge connection is revoked or expired."))
+		raise frappe.PermissionError(_("This Vyogo Forge AI connection is revoked or expired."))
 	return conn
 
 

@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Vyogo and contributors
 # For license information, please see license.txt
 
-"""The guard is the line between an untrusted FrappeForge sandbox and this site: an agent user
+"""The guard is the line between an untrusted Vyogo Forge AI sandbox and this site: an agent user
 may read and propose, nothing else, whatever roles it holds."""
 
 import unittest
@@ -109,10 +109,9 @@ class TestEnforce(unittest.TestCase):
 
 	def test_expired_connection_is_refused_before_the_job_runs(self):
 		result = connection.create_connection(label="guard")
-		frappe.db.set_value(
-			"FrappeForge Connection",
-			result["connection"],
-			"expires_on",
+		frappe.db.set_single_value(
+			"AI Assistant Settings",
+			"forge_expires_on",
 			add_to_date(now_datetime(), minutes=-1),
 		)
 		frappe.cache.delete_keys("frappe_ai:frappeforge:")
@@ -161,7 +160,7 @@ class TestOverHttp(unittest.TestCase):
 			timeout=10,
 		)
 		self.assertEqual(r.status_code, 403, r.text[:300])
-		self.assertIn("FrappeForge may only read", r.text)
+		self.assertIn("Vyogo Forge AI may only read", r.text)
 		self.assertFalse(frappe.db.exists("ToDo", {"description": "written by a sandbox"}))
 
 	def test_agent_cannot_call_a_write_method(self):
@@ -172,7 +171,7 @@ class TestOverHttp(unittest.TestCase):
 			timeout=10,
 		)
 		self.assertEqual(r.status_code, 403, r.text[:300])
-		self.assertIn("FrappeForge may only read", r.text)
+		self.assertIn("Vyogo Forge AI may only read", r.text)
 
 	def test_revoked_key_stops_working(self):
 		extra = connection.create_connection(label="revoke me")

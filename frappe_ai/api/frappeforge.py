@@ -69,7 +69,7 @@ def create_connection(
 
 
 @frappe.whitelist(methods=["POST"])
-def rotate_key(connection_name: str) -> dict:
+def rotate_key(connection_name: str = "") -> dict:
 	frappe.only_for("System Manager")
 	out = connection.rotate_key(connection_name)
 	out["site_url"] = frappe.utils.get_url()
@@ -78,7 +78,7 @@ def rotate_key(connection_name: str) -> dict:
 
 
 @frappe.whitelist(methods=["POST"])
-def revoke(connection_name: str) -> dict:
+def revoke(connection_name: str = "") -> dict:
 	frappe.only_for("System Manager")
 	connection.revoke(connection_name)
 	return {"ok": True}
@@ -120,5 +120,5 @@ def _limit(action: str, per_hour: int) -> None:
 		frappe.cache.expire(key, 3600)
 	if count > per_hour:
 		raise frappe.TooManyRequestsError(
-			_("Too many requests from this FrappeForge connection; try again later.")
+			_("Too many requests from this Vyogo Forge AI connection; try again later.")
 		)

@@ -39,6 +39,35 @@ class AIAssistantSettings(Document):
 			parsed = urlparse(self.mcp_url)
 			if parsed.scheme not in ("http", "https") or not parsed.netloc:
 				frappe.throw(frappe._("MCP Server URL must start with https:// (or http://)."))
+		self._validate_forge_settings()
+
+	def _validate_forge_settings(self):
+		from frappe_ai.frappeforge import connection
+
+		if self.forge_allowed_ips:
+			self.forge_allowed_ips = ",".join(connection.parse_ips(self.forge_allowed_ips))
+		if self.forge_read_roles:
+			self.forge_read_roles = "\n".join(connection.parse_roles(self.forge_read_roles))
+
+	def on_update(self):
+		if self.forge_user and self.forge_status == "Active":
+			self.sync_forge_user()
+
+	def sync_forge_user(self):
+		from frappe_ai.frappeforge import connection
+
+		if not self.forge_user or not frappe.db.exists("User", self.forge_user):
+			return
+		user = frappe.get_doc("User", self.forge_user)
+		wanted = {connection.AGENT_ROLE, *connection.parse_roles(self.forge_read_roles)}
+		user.set("roles", [r for r in user.roles if r.role in wanted])
+		for role in wanted - {r.role for r in user.roles}:
+			user.append("roles", {"role": role})
+		user.restrict_ip = self.forge_allowed_ips or None
+		user.save(ignore_permissions=True)
+		if self.forge_expires_on:
+			connection.sync_token_expiry(self.forge_user, self.forge_expires_on)
+		connection._forget(self.forge_user)
 
 
 _RESERVED_SHORTCUTS = {

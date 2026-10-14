@@ -1,6 +1,6 @@
 {
  "actions": [],
- "autoname": "format:FFCL-{#####}",
+ "autoname": "format:VF-CL-{#####}",
  "creation": "2026-10-10 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -26,15 +26,14 @@
    "fieldname": "proposed_release",
    "fieldtype": "Link",
    "label": "Proposed Release",
-   "options": "FrappeForge Proposed Release",
+   "options": "Vyogo Forge AI Proposed Release",
    "read_only": 1,
    "in_standard_filter": 1
   },
   {
    "fieldname": "connection",
-   "fieldtype": "Link",
-   "label": "Connection",
-   "options": "FrappeForge Connection",
+   "fieldtype": "Data",
+   "label": "Workspace / Connection",
    "read_only": 1
   },
   {
@@ -99,14 +98,14 @@
    "fieldname": "rollback_of",
    "fieldtype": "Link",
    "label": "Rolls Back",
-   "options": "FrappeForge Change Log",
+   "options": "Vyogo Forge AI Change Log",
    "read_only": 1
   },
   {
    "fieldname": "rolled_back_by",
    "fieldtype": "Link",
    "label": "Rolled Back By",
-   "options": "FrappeForge Change Log",
+   "options": "Vyogo Forge AI Change Log",
    "read_only": 1
   },
   {
@@ -134,7 +133,7 @@
  "modified": "2026-10-10 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Assistant",
- "name": "FrappeForge Change Log",
+ "name": "Vyogo Forge AI Change Log",
  "owner": "Administrator",
  "permissions": [
   {

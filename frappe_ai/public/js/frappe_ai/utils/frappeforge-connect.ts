@@ -31,16 +31,16 @@ export function snippetFrom(result: ConnectionResult): string {
 
 export function connectFrappeForge(f: FrappeLike = (window as any).frappe): void {
   const dialog = new f.ui.Dialog({
-    title: __("Connect to FrappeForge"),
+    title: __("Connect to Vyogo Forge AI"),
     fields: [
       {
         fieldtype: "HTML",
         fieldname: "intro",
         options: `<p class="text-muted">${__(
-          "FrappeForge gets its own user on this site. It can read customizations and propose releases; only a System Manager can approve them.",
+          "Vyogo Forge AI gets its own user on this site. It can read customizations and propose releases; only a System Manager can approve them.",
         )}</p>`,
       },
-      { fieldtype: "Data", fieldname: "label", label: __("Label"), reqd: 1, description: __("e.g. the FrappeForge workspace") },
+      { fieldtype: "Data", fieldname: "label", label: __("Label"), reqd: 1, description: __("e.g. the Vyogo Forge AI workspace") },
       {
         fieldtype: "Int",
         fieldname: "expires_in_days",
@@ -52,7 +52,7 @@ export function connectFrappeForge(f: FrappeLike = (window as any).frappe): void
         fieldtype: "Small Text",
         fieldname: "allowed_ips",
         label: __("Allowed IP addresses"),
-        description: __("Comma-separated; leave empty to allow any. Use FrappeForge's published egress addresses."),
+        description: __("Comma-separated; leave empty to allow any. Use Vyogo Forge AI's published egress addresses."),
       },
       {
         fieldtype: "Small Text",
@@ -92,13 +92,13 @@ export async function rotateFrappeForgeKey(connection: string, f: FrappeLike = (
 
 function showSnippet(f: FrappeLike, result: ConnectionResult): void {
   const dialog = new f.ui.Dialog({
-    title: __("Paste this into FrappeForge"),
+    title: __("Paste this into Vyogo Forge AI"),
     fields: [
       {
         fieldtype: "HTML",
         fieldname: "warning",
         options: `<div class="alert alert-warning">${__(
-          "The API secret is shown once. Paste the snippet into FrappeForge's Connect live site dialog now; rotate the key if it is lost.",
+          "The API secret is shown once. Paste the snippet into Vyogo Forge AI's Connect live site dialog now; rotate the key if it is lost.",
         )}</div>`,
       },
       { fieldtype: "Code", fieldname: "snippet", label: __("Connection snippet"), options: "JSON", read_only: 1, default: snippetFrom(result) },

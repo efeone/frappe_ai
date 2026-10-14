@@ -34,7 +34,7 @@ doc_events = {
 	},
 }
 
-# FrappeForge (see frappe_ai/frappeforge/__init__.py): agent users may only read and propose.
+# Vyogo Forge AI (see frappe_ai/frappeforge/__init__.py): agent users may only read and propose.
 # auth_hooks run right after an API key sets the session user.
 auth_hooks = ["frappe_ai.frappeforge.guard.enforce"]
 

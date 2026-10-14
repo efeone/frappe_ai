@@ -96,9 +96,8 @@ class TestPermissions(unittest.TestCase):
 			api._limit("propose", api.PROPOSALS_PER_HOUR)
 		with self.assertRaises(frappe.TooManyRequestsError):
 			api._limit("propose", api.PROPOSALS_PER_HOUR)
-		other = connection.create_connection(label="limits other")
-		frappe.set_user(other["user"])
-		api._limit("propose", api.PROPOSALS_PER_HOUR)  # another tenant is not affected
+		frappe.set_user("other-user@example.com")
+		api._limit("propose", api.PROPOSALS_PER_HOUR)  # another user is not affected
 
 
 class TestOverHttp(unittest.TestCase):

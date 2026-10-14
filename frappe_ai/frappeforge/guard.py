@@ -1,4 +1,4 @@
-"""Request guard for FrappeForge agent users (``auth_hooks``).
+"""Request guard for Vyogo Forge AI agent users (``auth_hooks``).
 
 Frappe calls ``auth_hooks`` inside ``validate_auth`` right after an API key or bearer token has
 set the session user, which is the first point the user is known (``before_request`` runs
@@ -64,7 +64,7 @@ def decide(
 
 	parts = [p for p in (path or "").split("/") if p]
 	if parts[:1] != ["api"]:
-		return False, "only the REST API is open to FrappeForge"
+		return False, "only the REST API is open to Vyogo Forge AI"
 	rest = parts[1:]
 	if rest[:1] == ["v2"]:
 		rest = rest[1:]
@@ -76,7 +76,7 @@ def decide(
 		return _read_verb(method)
 	if rest[:1] == ["method"] and len(rest) == 2:
 		return _method_call(rest[1], allowed_methods)
-	return False, "this endpoint is not open to FrappeForge"
+	return False, "this endpoint is not open to Vyogo Forge AI"
 
 
 def enforce() -> None:
@@ -87,7 +87,7 @@ def enforce() -> None:
 	now = now_datetime()
 	conn = connection.agent_connection(user)
 	if conn is None or not connection.is_usable(conn, now):
-		raise frappe.PermissionError(_("This FrappeForge connection is revoked or expired."))
+		raise frappe.PermissionError(_("This Vyogo Forge AI connection is revoked or expired."))
 	request = frappe.request
 	allowed, reason = decide(
 		request.method,
@@ -99,14 +99,14 @@ def enforce() -> None:
 		frappe.logger("frappe_ai.frappeforge").warning(
 			"refused %s %s for %s: %s", request.method, request.path, conn["name"], reason
 		)
-		raise frappe.PermissionError(_("FrappeForge may only read and propose changes: {0}.").format(reason))
+		raise frappe.PermissionError(_("Vyogo Forge AI may only read and propose changes: {0}.").format(reason))
 	connection.touch(conn, now)
 
 
 def _read_verb(method: str) -> tuple[bool, str]:
 	if method in _READ_VERBS:
 		return True, ""
-	return False, f"{method} is a write; FrappeForge proposes changes instead"
+	return False, f"{method} is a write; Vyogo Forge AI proposes changes instead"
 
 
 def _method_call(name: str, allowed: frozenset) -> tuple[bool, str]:

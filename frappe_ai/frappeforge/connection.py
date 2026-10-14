@@ -1,12 +1,13 @@
-"""FrappeForge connections: one agent user per connection, scoped to reads and proposals.
+"""Vyogo Forge AI connections: one agent user per connection, scoped to reads and proposals.
 
-The agent user exists only to authenticate FrappeForge's API calls. It gets the
-``FrappeForge Agent`` role (read access to customization DocTypes) plus any read roles the
+The agent user exists only to authenticate Vyogo Forge AI's API calls. It gets the
+``Vyogo Forge AI Agent`` role (read access to customization DocTypes) plus any read roles the
 site owner adds; the request guard (``guard.py``) blocks every write whatever those roles allow.
-Keys are minted here, shown once, rotated or revoked here, and lapse at ``expires_on``.
+Keys are minted here, shown once, rotated or revoked here, and lapse at ``forge_expires_on`` in
+``AI Assistant Settings``.
 
-Besides the API key, each connection gets an OAuth Bearer token for the same user (an OAuth
-Client per connection, scope ``openid all``). The site's frappe-mcp-server authenticates FrappeForge
+Besides the API key, the connection gets an OAuth Bearer token for the same user (an OAuth
+Client, scope ``openid all``). The site's frappe-mcp-server authenticates Vyogo Forge AI
 with it (``openid_profile``) and forwards it on every call, so the guard applies there too. The token
 lives ``TOKEN_DAYS`` days at most and never outlives the connection; Rotate key issues a fresh one,
 and revoking or expiring the connection revokes it.
@@ -18,11 +19,11 @@ import frappe
 from frappe import _
 from frappe.utils import add_to_date, get_datetime, now_datetime
 
-AGENT_ROLE = "FrappeForge Agent"
-AGENT_EMAIL_DOMAIN = "frappeforge.invalid"
+AGENT_ROLE = "Vyogo Forge AI Agent"
+AGENT_EMAIL_DOMAIN = "vyogoforge.invalid"
 #: Roles that would let a leaked key read secrets or administer the site.
 PRIVILEGED_ROLES = frozenset({"Administrator", "System Manager"})
-#: What the agent role may read: the records a FrappeForge customization touches.
+#: What the agent role may read: the records a Vyogo Forge AI customization touches.
 READ_DOCTYPES = (
 	"Custom Field",
 	"Property Setter",
@@ -42,7 +43,7 @@ READ_DOCTYPES = (
 )
 MAX_EXPIRY_DAYS = 365
 DEFAULT_EXPIRY_DAYS = 30
-_CACHE_PREFIX = "frappe_ai:frappeforge:agent:"
+_CACHE_PREFIX = "frappe_ai:vyogo_forge:agent:"
 _CACHE_TTL = 60
 _LAST_SEEN_EVERY = 300
 TOKEN_SCOPES = "openid all"
@@ -87,77 +88,97 @@ def create_connection(
 	allowed_ips: str = "",
 	read_roles: str = "",
 ) -> dict:
-	"""Create a connection and its agent user; return the key pair (shown once)."""
+	"""Create/activate a connection in AI Assistant Settings and return the key pair (shown once)."""
 	expires_in_days = int(expires_in_days)
 	if not 1 <= expires_in_days <= MAX_EXPIRY_DAYS:
 		frappe.throw(_("A connection lasts between 1 and {0} days.").format(MAX_EXPIRY_DAYS))
 	ensure_agent_role()
 
-	conn = frappe.get_doc(
-		{
-			"doctype": "FrappeForge Connection",
-			"label": label,
-			"status": "Active",
-			"expires_on": add_to_date(now_datetime(), days=expires_in_days),
-			"allowed_ips": allowed_ips or "",
-			"read_roles": read_roles or "",
-			"created_by_user": frappe.session.user,
-		}
-	)
-	conn.insert(ignore_permissions=True)
+	settings = frappe.get_single("AI Assistant Settings")
+	expires_on = add_to_date(now_datetime(), days=expires_in_days)
 
-	user = frappe.get_doc(
-		{
-			"doctype": "User",
-			"email": f"ff-{conn.name.lower()}@{AGENT_EMAIL_DOMAIN}",
-			"first_name": "FrappeForge",
-			"last_name": label[:100],
-			"user_type": "System User",
-			"send_welcome_email": 0,
-			"enabled": 1,
-		}
-	)
-	user.flags.no_welcome_mail = True
-	user.insert(ignore_permissions=True)
-	conn.db_set("user", user.name)
-	conn.sync_user()
+	user_email = f"forge-agent@{AGENT_EMAIL_DOMAIN}"
+	if not frappe.db.exists("User", user_email):
+		user = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": user_email,
+				"first_name": "Vyogo Forge AI",
+				"last_name": label[:100],
+				"user_type": "System User",
+				"send_welcome_email": 0,
+				"enabled": 1,
+			}
+		)
+		user.flags.no_welcome_mail = True
+		user.insert(ignore_permissions=True)
+	else:
+		user = frappe.get_doc("User", user_email)
+		user.enabled = 1
+		user.first_name = "Vyogo Forge AI"
+		user.last_name = label[:100]
+		user.save(ignore_permissions=True)
+
+	settings.forge_status = "Active"
+	settings.forge_label = label
+	settings.forge_expires_on = expires_on
+	settings.forge_allowed_ips = allowed_ips or ""
+	settings.forge_read_roles = read_roles or ""
+	settings.forge_user = user.name
+	settings.forge_created_by = frappe.session.user
+	settings.forge_revoked_by = None
+	settings.flags.ignore_permissions = True
+	settings.save()
+	settings.sync_forge_user()
+
 	keys = _issue_keys(user.name)
-	keys["access_token"], keys["token_expires_on"] = _issue_token(conn)
+	keys["access_token"], keys["token_expires_on"] = _issue_token(settings)
 	return {
-		"connection": conn.name,
+		"connection": "AI Assistant Settings",
 		"user": user.name,
 		"site_url": frappe.utils.get_url(),
-		"expires_on": str(conn.expires_on),
+		"expires_on": str(settings.forge_expires_on),
 		**keys,
 	}
 
 
-def rotate_key(name: str) -> dict:
-	conn = frappe.get_doc("FrappeForge Connection", name)
-	if not is_usable(conn.as_dict(), now_datetime()):
+def rotate_key(name: str = "") -> dict:
+	settings = frappe.get_single("AI Assistant Settings")
+	conn_dict = {
+		"status": settings.forge_status,
+		"expires_on": settings.forge_expires_on,
+		"user": settings.forge_user,
+	}
+	if not is_usable(conn_dict, now_datetime()):
 		frappe.throw(_("Only an active connection can get a new key."))
-	keys = _issue_keys(conn.user)
-	keys["access_token"], keys["token_expires_on"] = _issue_token(conn)
+	keys = _issue_keys(settings.forge_user)
+	keys["access_token"], keys["token_expires_on"] = _issue_token(settings)
 	return keys
 
 
-def revoke(name: str) -> None:
-	conn = frappe.get_doc("FrappeForge Connection", name)
-	conn.db_set({"status": "Revoked", "revoked_by": frappe.session.user})
-	_disable_user(conn.user)
-	_forget(conn.user)
+def revoke(name: str = "") -> None:
+	settings = frappe.get_single("AI Assistant Settings")
+	settings.forge_status = "Revoked"
+	settings.forge_revoked_by = frappe.session.user
+	settings.flags.ignore_permissions = True
+	settings.save()
+	_disable_user(settings.forge_user)
+	_forget(settings.forge_user)
 
 
 def expire_connections() -> None:
 	"""Scheduled hourly: lapsed connections stop working even if nobody revokes them."""
-	for row in frappe.get_all(
-		"FrappeForge Connection",
-		filters={"status": "Active", "expires_on": ("<", now_datetime())},
-		fields=["name", "user"],
+	settings = frappe.get_single("AI Assistant Settings")
+	if (
+		settings.forge_status == "Active"
+		and settings.forge_expires_on
+		and get_datetime(settings.forge_expires_on) < now_datetime()
 	):
-		frappe.db.set_value("FrappeForge Connection", row.name, "status", "Expired")
-		_disable_user(row.user)
-		_forget(row.user)
+		settings.forge_status = "Expired"
+		settings.flags.ignore_permissions = True
+		settings.save()
+		_disable_user(settings.forge_user)
+		_forget(settings.forge_user)
 
 
 def agent_connection(user: str) -> dict | None:
@@ -167,30 +188,32 @@ def agent_connection(user: str) -> dict | None:
 	key = _CACHE_PREFIX + user
 	cached = frappe.cache.get_value(key)
 	if cached is None:
-		row = frappe.db.get_value(
-			"FrappeForge Connection",
-			{"user": user},
-			["name", "status", "expires_on", "last_seen"],
-			as_dict=True,
-		)
-		cached = (
-			{
-				"name": row.name,
-				"status": row.status,
-				"expires_on": str(row.expires_on),
-				"last_seen": str(row.last_seen or ""),
+		settings = frappe.get_single("AI Assistant Settings")
+		if settings.forge_user == user:
+			cached = {
+				"name": "AI Assistant Settings",
+				"status": settings.forge_status or "Disconnected",
+				"expires_on": str(settings.forge_expires_on or ""),
+				"last_seen": str(settings.forge_last_seen or ""),
 			}
-			if row
-			else {}
-		)
+		else:
+			cached = {}
 		frappe.cache.set_value(key, cached, expires_in_sec=_CACHE_TTL)
 	if not cached:
 		return None
-	return {**cached, "expires_on": get_datetime(cached["expires_on"])}
+	return {
+		**cached,
+		"expires_on": get_datetime(cached["expires_on"]) if cached.get("expires_on") else None,
+	}
 
 
 def is_usable(conn: dict | None, now) -> bool:
-	return bool(conn) and conn.get("status") == "Active" and get_datetime(conn.get("expires_on")) > now
+	return (
+		bool(conn)
+		and conn.get("status") == "Active"
+		and conn.get("expires_on") is not None
+		and get_datetime(conn.get("expires_on")) > now
+	)
 
 
 def touch(conn: dict, now) -> None:
@@ -198,7 +221,7 @@ def touch(conn: dict, now) -> None:
 	last = conn.get("last_seen")
 	if last and (now - get_datetime(last)).total_seconds() < _LAST_SEEN_EVERY:
 		return
-	frappe.db.set_value("FrappeForge Connection", conn["name"], "last_seen", now, update_modified=False)
+	frappe.db.set_single_value("AI Assistant Settings", "forge_last_seen", now)
 	frappe.cache.delete_value(_CACHE_PREFIX + frappe.session.user)
 
 
@@ -223,7 +246,7 @@ def parse_roles(raw: str) -> list[str]:
 	roles = [r.strip() for r in (raw or "").splitlines() if r.strip()]
 	for role in roles:
 		if role in PRIVILEGED_ROLES:
-			frappe.throw(_("The {0} role cannot be given to a FrappeForge connection.").format(role))
+			frappe.throw(_("The {0} role cannot be given to a Vyogo Forge AI connection.").format(role))
 		if not frappe.db.exists("Role", role):
 			frappe.throw(_("Role {0} does not exist.").format(role))
 	return roles
@@ -232,39 +255,41 @@ def parse_roles(raw: str) -> list[str]:
 def _issue_keys(user: str) -> dict:
 	doc = frappe.get_doc("User", user)
 	if not doc.api_key:
-		doc.api_key = frappe.generate_hash(length=15)
+	doc.api_key = frappe.generate_hash(length=15)
 	secret = frappe.generate_hash(length=32)
 	doc.api_secret = secret
 	doc.save(ignore_permissions=True)
 	return {"api_key": doc.api_key, "api_secret": secret}
 
 
-def _issue_token(conn) -> tuple[str, str]:
+def _issue_token(settings) -> tuple[str, str]:
 	"""A new Bearer token for the connection's user, for TOKEN_DAYS or until the connection ends;
 	earlier ones stop working. Returns (token, expiry)."""
-	if not conn.oauth_client or not frappe.db.exists("OAuth Client", conn.oauth_client):
+	oauth_client = getattr(settings, "forge_oauth_client", None)
+	if not oauth_client or not frappe.db.exists("OAuth Client", oauth_client):
 		client = frappe.get_doc(
 			{
 				"doctype": "OAuth Client",
-				"app_name": f"FrappeForge {conn.label}"[:140],
+				"app_name": f"Vyogo Forge AI {settings.forge_label or ''}"[:140],
 				"scopes": TOKEN_SCOPES,
 				"skip_authorization": 1,
 				"grant_type": "Authorization Code",
 				"response_type": "Code",
-				"redirect_uris": "https://frappeforge.invalid/callback",
-				"default_redirect_uri": "https://frappeforge.invalid/callback",
+				"redirect_uris": "https://vyogoforge.invalid/callback",
+				"default_redirect_uri": "https://vyogoforge.invalid/callback",
 			}
 		).insert(ignore_permissions=True)
-		conn.db_set("oauth_client", client.name)
-	_revoke_tokens(conn.user)
-	expires = min(add_to_date(now_datetime(), days=TOKEN_DAYS), get_datetime(conn.expires_on))
+		settings.db_set("forge_oauth_client", client.name)
+		oauth_client = client.name
+	_revoke_tokens(settings.forge_user)
+	expires = min(add_to_date(now_datetime(), days=TOKEN_DAYS), get_datetime(settings.forge_expires_on))
 	token = frappe.generate_hash(length=40)
 	frappe.get_doc(
 		{
 			"doctype": "OAuth Bearer Token",
 			"access_token": token,
-			"client": conn.oauth_client,
-			"user": conn.user,
+			"client": oauth_client,
+			"user": settings.forge_user,
 			"scopes": TOKEN_SCOPES,
 			"status": "Active",
 			"expiration_time": expires,

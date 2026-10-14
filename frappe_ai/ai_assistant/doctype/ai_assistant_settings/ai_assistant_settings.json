@@ -13,8 +13,20 @@
   "section_ui",
   "sidebar_width",
   "keyboard_shortcut",
-  "section_frappeforge",
-  "mcp_url"
+  "section_vyogo_forge",
+  "forge_status",
+  "forge_label",
+  "mcp_url",
+  "forge_expires_on",
+  "col_forge_1",
+  "forge_allowed_ips",
+  "forge_read_roles",
+  "section_forge_agent",
+  "forge_user",
+  "forge_oauth_client",
+  "forge_last_seen",
+  "forge_created_by",
+  "forge_revoked_by"
  ],
  "fields": [
   {
@@ -62,15 +74,91 @@
    "label": "Keyboard Shortcut"
   },
   {
-   "fieldname": "section_frappeforge",
+   "fieldname": "section_vyogo_forge",
    "fieldtype": "Section Break",
-   "label": "FrappeForge"
+   "label": "Vyogo Forge AI"
+  },
+  {
+   "default": "Disconnected",
+   "fieldname": "forge_status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Disconnected\nActive\nRevoked\nExpired",
+   "read_only": 1
+  },
+  {
+   "fieldname": "forge_label",
+   "fieldtype": "Data",
+   "label": "Workspace Label",
+   "read_only": 1
   },
   {
    "fieldname": "mcp_url",
    "fieldtype": "Data",
    "label": "MCP Server URL",
-   "description": "This site's frappe-mcp-server, if one is running for it. FrappeForge reads live data through it; it is added to the Connect to FrappeForge snippet."
+   "description": "This site's frappe-mcp-server, if one is running for it. Vyogo Forge AI reads live data through it."
+  },
+  {
+   "fieldname": "forge_expires_on",
+   "fieldtype": "Datetime",
+   "label": "Expires On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col_forge_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Comma-separated addresses or prefixes the agent may call from. Empty allows any.",
+   "fieldname": "forge_allowed_ips",
+   "fieldtype": "Small Text",
+   "label": "Allowed IP Addresses"
+  },
+  {
+   "description": "One role per line, e.g. Sales User, to let the agent read business documents.",
+   "fieldname": "forge_read_roles",
+   "fieldtype": "Small Text",
+   "label": "Additional Read Roles"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_forge_agent",
+   "fieldtype": "Section Break",
+   "label": "Agent User & Activity"
+  },
+  {
+   "fieldname": "forge_user",
+   "fieldtype": "Link",
+   "label": "Agent User",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "forge_oauth_client",
+   "fieldtype": "Link",
+   "label": "OAuth Client",
+   "options": "OAuth Client",
+   "read_only": 1
+  },
+  {
+   "fieldname": "forge_last_seen",
+   "fieldtype": "Datetime",
+   "label": "Last Seen",
+   "read_only": 1
+  },
+  {
+   "fieldname": "forge_created_by",
+   "fieldtype": "Link",
+   "label": "Connected By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "forge_revoked_by",
+   "fieldtype": "Link",
+   "label": "Revoked By",
+   "options": "User",
+   "read_only": 1
   }
  ],
  "issingle": 1,
