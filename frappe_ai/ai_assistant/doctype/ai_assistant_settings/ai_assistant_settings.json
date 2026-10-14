@@ -10,6 +10,9 @@
   "agent_url",
   "section_settings",
   "timeout",
+  "section_changes",
+  "write_approval",
+  "allow_session_auto_approve",
   "section_ui",
   "sidebar_width",
   "keyboard_shortcut",
@@ -55,13 +58,34 @@
    "label": "Timeout (seconds)"
   },
   {
+   "fieldname": "section_changes",
+   "fieldtype": "Section Break",
+   "label": "Changes Made by the Assistant"
+  },
+  {
+   "default": "Ask every time",
+   "description": "What happens when the assistant wants to create, change or delete a record. \"Ask every time\" shows an Allow / Deny card in the chat. Deletes keep asking unless all changes are auto-approved.",
+   "fieldname": "write_approval",
+   "fieldtype": "Select",
+   "label": "Write Approval",
+   "options": "Ask every time\nAuto-approve creates and updates\nAuto-approve all changes\nRead only"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.write_approval == 'Ask every time'",
+   "description": "Users may choose \"Auto-approve creates and updates\" for themselves in the sidebar, and \"Allow all in this conversation\" on a card. Deletes, scripts, users, roles and permissions always ask.",
+   "fieldname": "allow_session_auto_approve",
+   "fieldtype": "Check",
+   "label": "Let Users Turn On Auto-Approval"
+  },
+  {
    "fieldname": "section_ui",
    "fieldtype": "Section Break",
    "label": "Sidebar Settings"
   },
   {
    "default": "380",
-   "description": "Chat panel width in pixels. Range 300\u2013600.",
+   "description": "Chat panel width in pixels. Range 300–600.",
    "fieldname": "sidebar_width",
    "fieldtype": "Int",
    "label": "Sidebar Width"
@@ -163,7 +187,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-04-14 00:00:00.000000",
+ "modified": "2026-10-15 01:30:00.000000",
  "modified_by": "Administrator",
  "module": "AI Assistant",
  "name": "AI Assistant Settings",

@@ -11,6 +11,7 @@
   "tool_name",
   "tool_args_json",
   "tool_result_json",
+  "transcript_json",
   "created_at",
   "tenant_id"
  ],
@@ -50,6 +51,14 @@
    "label": "Tool Result JSON"
   },
   {
+   "fieldname": "transcript_json",
+   "fieldtype": "Long Text",
+   "label": "Transcript JSON",
+   "read_only": 1,
+   "hidden": 1,
+   "description": "The turn as the model saw it: its calls, the tool results (trimmed) and its reply. The agent replays it as the conversation's memory."
+  },
+  {
    "fieldname": "created_at",
    "fieldtype": "Datetime",
    "label": "Created At"
@@ -66,7 +75,7 @@
   }
  ],
  "links": [],
- "modified": "2026-04-14 00:00:00.000000",
+ "modified": "2026-10-15 01:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Assistant",
  "name": "AI Chat Message",

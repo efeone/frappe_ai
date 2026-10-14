@@ -10,17 +10,23 @@
  *   4. Browser receives chunks via the existing realtime subscription.
  *
  * Chunk types from the relay:
- *   {type:"content",  text:"..."}          – plain-text token
- *   {type:"done",     tools_called:[]}     – stream complete
- *   {type:"error",    message:"..."}       – agent or relay error
+ *   {type:"content",      text:"..."}              – plain-text token
+ *   {type:"tool_confirm", id, name, arguments}     – a write waiting for Allow / Deny
+ *   {type:"done",         tools_called:[]}         – stream complete
+ *   {type:"error",        message:"..."}           – agent or relay error
+ *
+ * A turn that ends on tool_confirm has made no change. Allow starts a new
+ * turn through start_stream with `confirmation` instead of `message`; the
+ * server mints the one-time token the agent needs, so the browser never
+ * holds one.
  */
 
 import { ref, readonly } from "vue";
-import type { AssistantMessage, Message } from "../types/messages";
+import type { AssistantMessage, Message, ToolConfirmMessage } from "../types/messages";
 import { getPageContext } from "../utils/context";
 
 interface Chunk {
-  type: "content" | "content_block" | "tool_call" | "done" | "error" | "session";
+  type: "content" | "content_block" | "tool_call" | "tool_confirm" | "done" | "error" | "session";
   text?: string;
   message?: string;
   tools_called?: string[];
@@ -32,21 +38,29 @@ interface Chunk {
   // component registry.
   block?: Record<string, unknown> & { type: string };
   // For chunk.type === "tool_call" — name + arguments of the agent's invocation.
+  // For chunk.type === "tool_confirm" — the same, plus `id`, for a call not made yet.
   name?: string;
   arguments?: Record<string, unknown>;
 }
+
+/** What one turn sends to start_stream: the user's words, or the write they allowed. */
+type Turn =
+  | { message: string }
+  | { confirmation: { tool: string; arguments: Record<string, unknown> } };
 
 interface StreamResult {
   session_id: string;
 }
 
-// Frontend safety-net: bound how long sendMessage() can hang before
+// Frontend safety-net: bound how long a turn can go without a chunk before
 // settle("reject") fires. Keep this generous (and >= the server-side
 // `AI Assistant Settings.timeout` so the relay surfaces its own error
 // first when it can), since chart prompts that fan out to multiple
-// tools routinely take 60–90s end-to-end. A user-visible "timed out"
-// is preferable to a never-resolving spinner if everything else
-// breaks; 2 minutes is the upper bound we want to wait.
+// tools routinely take 60–90s end-to-end. The timer restarts on every
+// chunk, so a long answer — or a chain of auto-approved writes the relay
+// runs on one stream — is bounded by silence, not by its whole length.
+// A user-visible "timed out" is preferable to a never-resolving spinner
+// if everything else breaks.
 const CLIENT_TIMEOUT_MS = 120_000;
 
 // Frappe's `frappe.call` rejects with a plain object (not Error) shaped like
@@ -114,6 +128,54 @@ export function useChat() {
       timestamp: new Date(),
     };
     messages.value.push(userMessage);
+    await _runTurn({ message: content });
+  }
+
+  /**
+   * The user allowed a write on its card. The card is settled at once, then a
+   * turn starts that runs the call before the model speaks; the server mints
+   * the token for it. With `forConversation` the server is first told to skip
+   * the card for the rest of this conversation (creates and updates only).
+   */
+  async function allowWrite(
+    confirmId: string,
+    options: { forConversation?: boolean } = {},
+  ): Promise<void> {
+    if (isLoading.value || !_conversationId) return;
+    const card = _findConfirm(confirmId);
+    if (!card || card.toolConfirm.status !== "pending") return;
+    card.toolConfirm.status = "allowed";
+    if (options.forConversation) {
+      try {
+        await frappe.call({
+          method: "frappe_ai.api.confirm.set_session_auto_approve",
+          args: { session_id: _conversationId, enabled: true },
+        });
+      } catch {
+        // the site may have turned this off since the card was drawn; the
+        // single Allow below still stands
+      }
+    }
+    await _runTurn({
+      confirmation: { tool: card.toolConfirm.name, arguments: card.toolConfirm.arguments },
+    });
+  }
+
+  /** The user refused a write. Nothing is sent: a token is never minted, so nothing can run. */
+  function denyWrite(confirmId: string): void {
+    const card = _findConfirm(confirmId);
+    if (!card || card.toolConfirm.status !== "pending") return;
+    card.toolConfirm.status = "denied";
+  }
+
+  function _findConfirm(confirmId: string): ToolConfirmMessage | undefined {
+    const found = messages.value.find(
+      (m) => m.role === "tool_confirm" && m.toolConfirm.id === confirmId,
+    );
+    return found && found.role === "tool_confirm" ? found : undefined;
+  }
+
+  async function _runTurn(turn: Turn): Promise<void> {
     isLoading.value = true;
     lastError.value = null;
 
@@ -184,8 +246,17 @@ export function useChat() {
         };
         canCancel.value = true;
 
+        const armTimer = () => {
+          if (timerId !== undefined) clearTimeout(timerId);
+          timerId = setTimeout(
+            () => settle("reject", new Error("Response timed out. Please try again.")),
+            CLIENT_TIMEOUT_MS,
+          );
+        };
+
         frappe.realtime.on(eventName, (chunk: Chunk) => {
           if (settled) return;
+          armTimer();
           if (chunk.type === "session" && chunk.id) {
             // The agent persisted the conversation under this canonical id
             // (which may differ from the optimistic UUID we minted). Adopt
@@ -250,6 +321,26 @@ export function useChat() {
               timestamp: new Date(),
             };
             messages.value.splice(assistantIdx, 0, toolCallMessage);
+          } else if (chunk.type === "tool_confirm" && chunk.name && chunk.id) {
+            // A write the agent wants to make and has not made. The card goes
+            // before the assistant bubble, like a tool call; the turn's `done`
+            // follows at once, and the card's buttons start the next turn.
+            const assistantIdx = messages.value.findIndex((m) => m.id === assistantId);
+            if (assistantIdx < 0) return;
+            const confirmMessage: Message = {
+              id: crypto.randomUUID(),
+              role: "tool_confirm",
+              content: "",
+              toolConfirm: {
+                id: chunk.id,
+                name: chunk.name,
+                arguments: chunk.arguments ?? {},
+                status: "pending",
+                timestamp: new Date(),
+              },
+              timestamp: new Date(),
+            };
+            messages.value.splice(assistantIdx, 0, confirmMessage);
           } else if (chunk.type === "done") {
             _updateMessage(assistantId, (m) => {
               m.pending = false;
@@ -264,7 +355,7 @@ export function useChat() {
         frappe.call<StreamResult>({
           method: "frappe_ai.api.chat.start_stream",
           args: {
-            message: content,
+            ...turn,
             session_id: sessionId,
             // Inject route/doctype/docname/currency so the agent prompt
             // can ground answers in the user's current page. The relay
@@ -275,14 +366,11 @@ export function useChat() {
         });
 
         // Safety net: if the RQ worker dies without emitting "done" or
-        // "error", the promise above never settles. Schedule a hard
-        // timeout that flows through `settle()` like every other
+        // "error", the promise above never settles. Arm the silence
+        // timeout, which flows through `settle()` like every other
         // settlement path, so a late chunk arriving after the timer
         // can't add a second error bubble.
-        timerId = setTimeout(
-          () => settle("reject", new Error("Response timed out. Please try again.")),
-          CLIENT_TIMEOUT_MS,
-        );
+        armTimer();
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to get response";
@@ -356,24 +444,33 @@ export function useChat() {
 
   interface RecentMessagesResponse {
     session_id: string | null;
-    messages: Array<{ id: string; role: string; content: string; timestamp: string | null }>;
+    messages: Array<{
+      id: string;
+      role: string;
+      content: string;
+      timestamp: string | null;
+      // the cards an assistant reply carried (KPI, chart, table), as the agent saved them
+      blocks?: import("../types").ContentBlock[];
+    }>;
   }
 
-  async function loadRecentConversation(): Promise<void> {
+  async function loadRecentConversation(sessionId?: string): Promise<void> {
     // Hydrate the sidebar on mount so a page reload doesn't throw away the
-    // user's last chat. Best-effort: any failure leaves the bubble list
-    // empty so the user can simply start a new conversation.
+    // user's last chat, or open one picked from the history list. Best-effort:
+    // any failure leaves the bubble list as it was.
+    if (sessionId && isLoading.value) return; // never swap chats under a reply still arriving
     try {
       const result = await new Promise<RecentMessagesResponse>((resolve, reject) => {
         frappe.call<RecentMessagesResponse>({
           method: "frappe_ai.api.chat.get_recent_messages",
-          args: { limit: 50 },
+          args: sessionId ? { limit: 50, session_id: sessionId } : { limit: 50 },
           callback: (r) => resolve(r?.message ?? { session_id: null, messages: [] }),
           error: reject,
         });
       });
 
-      if (!result || !result.session_id || result.messages.length === 0) return;
+      // on mount an empty answer keeps the empty state; a picked chat always replaces the view
+      if (!result || !result.session_id || (!sessionId && result.messages.length === 0)) return;
 
       _conversationId = result.session_id;
       // Skip rows whose role we can't faithfully render (e.g. persisted
@@ -381,12 +478,15 @@ export function useChat() {
       // hydrated row). Better to omit than to mislabel them as user input.
       messages.value = result.messages
         .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({
-          id: m.id,
-          role: m.role as "user" | "assistant",
-          content: m.content,
-          timestamp: m.timestamp ? new Date(m.timestamp) : null,
-        }));
+        .map((m): Message => {
+          const timestamp = m.timestamp ? new Date(m.timestamp) : null;
+          if (m.role === "user") return { id: m.id, role: "user", content: m.content, timestamp };
+          // no `parts` on a restored reply: the bubble renders its text, then its cards
+          const blocks = Array.isArray(m.blocks) ? m.blocks : [];
+          return { id: m.id, role: "assistant", content: m.content, timestamp, ...(blocks.length ? { blocks } : {}) };
+        })
+        // a reply with neither text nor a card has nothing to show
+        .filter((m) => m.role !== "assistant" || !!m.content || !!m.blocks?.length);
     } catch (err) {
       // Swallow — restoring history is a nice-to-have, not a blocker.
       console.warn("[AI Sidebar] loadRecentConversation failed", err);
@@ -456,8 +556,12 @@ export function useChat() {
     canCancel: readonly(canCancel),
     lastError: readonly(lastError),
     sendMessage,
+    allowWrite,
+    denyWrite,
     cancelMessage,
     clearMessages,
     loadRecentConversation,
+    /** The conversation now on screen, for the history list to mark. */
+    currentConversation: () => _conversationId,
   };
 }

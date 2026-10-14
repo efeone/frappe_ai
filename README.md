@@ -12,6 +12,7 @@
 - Page-context forwarding: the agent sees the user's current route / doctype / docname for grounded answers
 - Authentication via the user's existing `sid` cookie — no extra OAuth client to provision
 - Multi-site aware: every request to the agent names the site it came from, so one agent can serve many sites on a shared bench
+- Writes need the user's say: a create, update or delete the assistant wants to make shows an Allow / Deny card, and runs only on a one-time token this app mints and the MCP server redeems. An administrator can auto-approve creates and updates, auto-approve everything, or make the assistant read-only
 
 ## Installation
 
@@ -57,7 +58,10 @@ Click the AI button in the navbar (or press your configured shortcut) and type a
 | Where | Key | Purpose |
 | --- | --- | --- |
 | `site_config.json` | `frappe_ai_agent_url` | Agent endpoint (authoritative) |
+| `site_config.json` | `frappe_ai_max_auto_approved_writes` | How many auto-approved writes one message may chain before the next one shows a card again (default 20) |
 | AI Assistant Settings | `enabled` | Master switch |
+| AI Assistant Settings | `write_approval` | What happens when the assistant wants to change data: ask every time (default), auto-approve creates and updates, auto-approve all changes, or read only |
+| AI Assistant Settings | `allow_session_auto_approve` | Adds "Allow all in this conversation" to the card (creates and updates only; deletes always ask) |
 | AI Assistant Settings | `timeout` | Per-request timeout (1–300s) |
 | AI Assistant Settings | `sidebar_width` | Sidebar width in px (300–600) |
 | AI Assistant Settings | `keyboard_shortcut` | Toggle combo (e.g. `Alt+/`) |

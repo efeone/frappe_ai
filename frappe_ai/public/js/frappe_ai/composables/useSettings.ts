@@ -6,19 +6,29 @@ export interface FrappeAISettings {
   enabled: boolean;
   sidebarWidth: number;
   keyboardShortcut: string;
+  /** The site's answer to a write the agent wants to make; "Ask every time" shows a card. */
+  writeApproval: string;
+  /** Whether the card may offer "Allow all in this conversation". */
+  allowSessionAutoApprove: boolean;
 }
 
 interface FrappeAISettingsResponse {
   enabled?: boolean;
   sidebar_width?: number;
   keyboard_shortcut?: string;
+  write_approval?: string;
+  allow_session_auto_approve?: boolean;
 }
+
+export const WRITE_APPROVAL_ASK = "Ask every time";
 
 const DEFAULT_SETTINGS: FrappeAISettings = {
   enabled: false,
   sidebarWidth: 380,
   // Matches the doctype default; `Ctrl+/` is reserved by Frappe v16.
   keyboardShortcut: "Alt+/",
+  writeApproval: WRITE_APPROVAL_ASK,
+  allowSessionAutoApprove: false,
 };
 
 const settings: Ref<FrappeAISettings> = ref({ ...DEFAULT_SETTINGS });
@@ -41,6 +51,8 @@ export function useSettings() {
           enabled: msg.enabled ?? false,
           sidebarWidth: msg.sidebar_width ?? 380,
           keyboardShortcut: msg.keyboard_shortcut ?? "Alt+/",
+          writeApproval: msg.write_approval ?? WRITE_APPROVAL_ASK,
+          allowSessionAutoApprove: msg.allow_session_auto_approve ?? false,
         };
       }
     } catch {

@@ -4,6 +4,7 @@ import { frappeIcon } from "../utils/frappe-icon";
 const emit = defineEmits<{
 	clear: [];
 	close: [];
+	history: [];
 }>();
 </script>
 
@@ -11,8 +12,18 @@ const emit = defineEmits<{
 	<div class="frappe-ai-header">
 		<div class="frappe-ai-header-left">
 			<span class="frappe-ai-header-title">AI Sidebar</span>
+			<span class="frappe-ai-header-brand">from Vyogo</span>
 		</div>
 		<div class="frappe-ai-header-actions">
+			<button
+				class="frappe-ai-icon-btn"
+				title="Chat history"
+				aria-label="Chat history"
+				@click="emit('history')"
+			>
+				<!-- eslint-disable-next-line vue/no-v-html -->
+				<span v-html="frappeIcon('history', 'sm')" />
+			</button>
 			<button
 				class="frappe-ai-icon-btn"
 				title="New conversation"

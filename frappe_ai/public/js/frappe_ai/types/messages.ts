@@ -7,7 +7,7 @@
 
 import type { ContentBlock } from "./blocks";
 
-export type MessageRole = "user" | "assistant" | "tool_call" | "error";
+export type MessageRole = "user" | "assistant" | "tool_call" | "tool_confirm" | "error";
 
 export interface ToolCall {
   call_id: string;
@@ -23,6 +23,22 @@ export interface ToolCall {
   result?: string;
   success?: boolean;
   timestamp?: Date;
+}
+
+/**
+ * A write the agent wants to make and has not made. The turn ended on it; the
+ * tool runs only if the user allows it, on a follow-up turn that carries a
+ * one-time token minted server-side. Nothing here is persisted: a reload
+ * drops a pending card, and the user asks again.
+ */
+export interface ToolConfirm {
+  /** The agent's id for this pause; unique per card. */
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+  status: "pending" | "allowed" | "denied";
+  timestamp?: Date;
+  risk?: string;
 }
 
 export interface ErrorInfo {
@@ -95,10 +111,21 @@ export interface ToolCallMessage extends MessageBase {
   toolCall: ToolCall;
 }
 
+export interface ToolConfirmMessage extends MessageBase {
+  role: "tool_confirm";
+  content: ""; // unused for this role — the renderer reads toolConfirm instead
+  toolConfirm: ToolConfirm;
+}
+
 export interface ErrorMessage extends MessageBase {
   role: "error";
   content: string;
   error: ErrorInfo;
 }
 
-export type Message = UserMessage | AssistantMessage | ToolCallMessage | ErrorMessage;
+export type Message =
+  | UserMessage
+  | AssistantMessage
+  | ToolCallMessage
+  | ToolConfirmMessage
+  | ErrorMessage;

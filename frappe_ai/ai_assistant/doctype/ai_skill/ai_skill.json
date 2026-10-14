@@ -1,0 +1,107 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:skill_name",
+ "creation": "2026-10-14 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Setup",
+ "engine": "InnoDB",
+ "field_order": [
+  "skill_name",
+  "risk",
+  "column_break_1",
+  "disabled",
+  "override_shipped",
+  "section_description",
+  "description",
+  "section_instructions",
+  "instructions"
+ ],
+ "fields": [
+  {
+   "description": "Identifier matching kebab-case (e.g. custom-sales-approval)",
+   "fieldname": "skill_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Skill Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "writes",
+   "fieldname": "risk",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Risk Level",
+   "options": "read-only\nwrites\nalways-ask",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  },
+  {
+   "default": "0",
+   "description": "Allow this site-level skill to override a bundled shipped skill with the same name",
+   "fieldname": "override_shipped",
+   "fieldtype": "Check",
+   "label": "Override Shipped Skill"
+  },
+  {
+   "fieldname": "section_description",
+   "fieldtype": "Section Break",
+   "label": "Description"
+  },
+  {
+   "description": "Brief one-line description (max 200 characters) for the system prompt catalog",
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Catalog Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_instructions",
+   "fieldtype": "Section Break",
+   "label": "Instructions"
+  },
+  {
+   "fieldname": "instructions",
+   "fieldtype": "Code",
+   "label": "Markdown Instructions",
+   "options": "Markdown",
+   "reqd": 1
+  }
+ ],
+ "icon": "fa fa-lightbulb-o",
+ "idx": 1,
+ "in_create": 1,
+ "links": [],
+ "modified": "2026-10-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Assistant",
+ "name": "AI Skill",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

@@ -2,16 +2,21 @@
 import { ref, watch, nextTick, computed, onMounted, onUnmounted } from "vue";
 import MessageBubble from "./MessageBubble.vue";
 import ToolCallCard from "./ToolCallCard.vue";
+import ToolConfirmCard from "./ToolConfirmCard.vue";
 import { frappeIcon } from "../utils/frappe-icon";
 import { getPageContext } from "../utils/context";
 import type { Message } from "../types/messages";
 
 const props = defineProps<{
 	messages: readonly Message[];
+	/** Whether a confirm card may offer "Allow all in this conversation". */
+	canAllowConversation?: boolean;
 }>();
 
 const emit = defineEmits<{
 	send: [content: string];
+	allow: [confirmId: string, forConversation: boolean];
+	deny: [confirmId: string];
 }>();
 
 const container = ref<HTMLElement>();
@@ -105,6 +110,13 @@ watch(
 			<ToolCallCard
 				v-if="msg.role === 'tool_call' && msg.toolCall"
 				:tool-call="msg.toolCall"
+			/>
+			<ToolConfirmCard
+				v-else-if="msg.role === 'tool_confirm' && msg.toolConfirm"
+				:tool-confirm="msg.toolConfirm"
+				:can-allow-conversation="canAllowConversation"
+				@allow="(id, forConversation) => emit('allow', id, forConversation)"
+				@deny="(id) => emit('deny', id)"
 			/>
 			<MessageBubble v-else :message="msg" />
 		</template>

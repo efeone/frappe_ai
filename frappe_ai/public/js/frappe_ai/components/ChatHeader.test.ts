@@ -3,11 +3,18 @@ import { mount } from "@vue/test-utils";
 import ChatHeader from "./ChatHeader.vue";
 
 describe("ChatHeader", () => {
-  it("renders the app title and two icon buttons", () => {
+  it("renders the app title, the brand and three icon buttons", () => {
     const wrapper = mount(ChatHeader);
     expect(wrapper.text()).toContain("AI Sidebar");
+    expect(wrapper.text()).toContain("from Vyogo");
     const buttons = wrapper.findAll("button.frappe-ai-icon-btn");
-    expect(buttons).toHaveLength(2);
+    expect(buttons).toHaveLength(3);
+  });
+
+  it("emits 'history' from the history button", async () => {
+    const wrapper = mount(ChatHeader);
+    await wrapper.find('button[aria-label="Chat history"]').trigger("click");
+    expect(wrapper.emitted("history")).toHaveLength(1);
   });
 
   it("emits 'clear' when the new-conversation button is clicked", async () => {

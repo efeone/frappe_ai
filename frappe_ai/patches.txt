@@ -4,3 +4,4 @@
 # This file is empty by design (no migrations needed yet), but it must
 # exist — bench's `is_frappe_app()` check requires hooks.py + modules.txt
 # + patches.txt to consider a directory a valid Frappe app.
+frappe_ai.patches.auto_approval_on_by_default

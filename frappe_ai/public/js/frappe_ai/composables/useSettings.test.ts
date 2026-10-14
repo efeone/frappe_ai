@@ -24,6 +24,8 @@ describe("useSettings", () => {
       enabled: false,
       sidebarWidth: 380,
       keyboardShortcut: "Alt+/",
+      writeApproval: "Ask every time",
+      allowSessionAutoApprove: false,
     });
   });
 
@@ -48,6 +50,8 @@ describe("useSettings", () => {
       enabled: true,
       sidebarWidth: 420,
       keyboardShortcut: "Mod+Shift+A",
+      writeApproval: "Ask every time",
+      allowSessionAutoApprove: false,
     });
   });
 
@@ -60,6 +64,8 @@ describe("useSettings", () => {
       enabled: false,
       sidebarWidth: 380,
       keyboardShortcut: "Alt+/",
+      writeApproval: "Ask every time",
+      allowSessionAutoApprove: false,
     });
   });
 
@@ -82,6 +88,8 @@ describe("useSettings", () => {
       enabled: false,
       sidebarWidth: 380,
       keyboardShortcut: "Alt+/",
+      writeApproval: "Ask every time",
+      allowSessionAutoApprove: false,
     });
   });
 

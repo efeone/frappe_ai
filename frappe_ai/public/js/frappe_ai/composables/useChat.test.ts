@@ -388,4 +388,138 @@ describe("useChat", () => {
     expect(errMsg?.error?.code).toBe("REQUEST_FAILED");
     expect(errMsg?.error?.message).toMatch(/timed out/i);
   });
+
+  describe("a write waiting for the user", () => {
+    async function pausedTurn() {
+      const { chat, listeners, startStreamCall } = await setup();
+      const promise = chat.sendMessage("make a print format");
+      fireChunk(listeners, { type: "session", id: "conv-1" });
+      fireChunk(listeners, { type: "content", text: "Create a new Print Format record." });
+      fireChunk(listeners, {
+        type: "tool_confirm",
+        id: "confirm-1",
+        name: "create_document",
+        arguments: { doctype: "Print Format", data: { name: "Clean" } },
+      });
+      fireChunk(listeners, { type: "done", tools_called: [] });
+      await promise;
+      return { chat, listeners, startStreamCall };
+    }
+
+    it("shows a pending card before the assistant bubble and ends the turn", async () => {
+      const { chat } = await pausedTurn();
+      expect(chat.isLoading.value).toBe(false);
+      expect(chat.messages.value.map((m) => m.role)).toEqual(["user", "tool_confirm", "assistant"]);
+      const card = chat.messages.value[1];
+      if (card.role !== "tool_confirm") throw new Error("expected a card");
+      expect(card.toolConfirm.status).toBe("pending");
+      expect(card.toolConfirm.name).toBe("create_document");
+      expect(card.toolConfirm.arguments).toEqual({ doctype: "Print Format", data: { name: "Clean" } });
+    });
+
+    it("Allow starts a turn carrying the call, not a message, on the same conversation", async () => {
+      const { chat, listeners, startStreamCall } = await pausedTurn();
+      const allowing = chat.allowWrite("confirm-1");
+      const card = chat.messages.value[1];
+      if (card.role !== "tool_confirm") throw new Error("expected a card");
+      expect(card.toolConfirm.status).toBe("allowed");
+      expect(chat.isLoading.value).toBe(true);
+      fireChunk(listeners, {
+        type: "tool_call",
+        name: "create_document",
+        arguments: { doctype: "Print Format" },
+      });
+      fireChunk(listeners, { type: "content", text: "Created PF-0001." });
+      fireChunk(listeners, { type: "done", tools_called: ["create_document"] });
+      await allowing;
+
+      expect(startStreamCall).toHaveBeenCalledTimes(2);
+      const second = startStreamCall.mock.calls[1][0].args;
+      expect(second.message).toBeUndefined();
+      expect(second.session_id).toBe("conv-1");
+      expect(second.confirmation).toEqual({
+        tool: "create_document",
+        arguments: { doctype: "Print Format", data: { name: "Clean" } },
+      });
+      // no second user bubble: the click is not a message of the user's
+      expect(chat.messages.value.map((m) => m.role)).toEqual([
+        "user",
+        "tool_confirm",
+        "assistant",
+        "tool_call",
+        "assistant",
+      ]);
+      expect(asAssistant(chat.messages.value[4]).content).toBe("Created PF-0001.");
+    });
+
+    it("Allow for the conversation tells the server first", async () => {
+      const { chat, listeners, startStreamCall } = await pausedTurn();
+      const calls = (g.frappe as { call: { mock: { calls: Array<[Record<string, unknown>]> } } }).call;
+      const allowing = chat.allowWrite("confirm-1", { forConversation: true });
+      await Promise.resolve();
+      fireChunk(listeners, { type: "done", tools_called: [] });
+      await allowing;
+      const methods = calls.mock.calls.map((c) => c[0].method);
+      const flagIdx = methods.indexOf("frappe_ai.api.confirm.set_session_auto_approve");
+      expect(flagIdx).toBeGreaterThan(-1);
+      expect(calls.mock.calls[flagIdx][0].args).toEqual({ session_id: "conv-1", enabled: true });
+      expect(startStreamCall).toHaveBeenCalledTimes(2);
+    });
+
+    it("Deny settles the card and sends nothing", async () => {
+      const { chat, startStreamCall } = await pausedTurn();
+      chat.denyWrite("confirm-1");
+      const card = chat.messages.value[1];
+      if (card.role !== "tool_confirm") throw new Error("expected a card");
+      expect(card.toolConfirm.status).toBe("denied");
+      expect(startStreamCall).toHaveBeenCalledTimes(1);
+      // a settled card cannot be allowed afterwards
+      await chat.allowWrite("confirm-1");
+      expect(startStreamCall).toHaveBeenCalledTimes(1);
+    });
+
+    it("the silence timeout restarts on every chunk", async () => {
+      const { chat, listeners } = await setup();
+      const promise = chat.sendMessage("slow");
+      vi.advanceTimersByTime(100_000);
+      fireChunk(listeners, { type: "content", text: "still here" });
+      vi.advanceTimersByTime(100_000);
+      // 200 s in total, but never 120 s of silence
+      expect(chat.messages.value.some((m) => m.role === "error")).toBe(false);
+      vi.advanceTimersByTime(120_000);
+      await promise;
+      expect(chat.messages.value.some((m) => m.role === "error")).toBe(true);
+    });
+  });
+
+  it("restores a reply's cards after a reload, and drops a reply with nothing to show", async () => {
+    const kpi = { type: "kpi", metrics: [{ label: "Net Profit", value: 1, format: "currency" }] };
+    g.frappe = {
+      call: vi.fn((opts: { method: string; callback?: (r: unknown) => void }) => {
+        if (opts.method === "frappe_ai.api.chat.get_recent_messages") {
+          opts.callback?.({
+            message: {
+              session_id: "conv-9",
+              messages: [
+                { id: "1", role: "user", content: "profit?", timestamp: null },
+                { id: "2", role: "assistant", content: "", timestamp: null, blocks: [kpi] },
+                { id: "3", role: "assistant", content: "", timestamp: null },
+                { id: "4", role: "assistant", content: "Done.", timestamp: null },
+              ],
+            },
+          });
+        }
+        return Promise.resolve();
+      }),
+      realtime: { on: vi.fn(), off: vi.fn() },
+    };
+    vi.resetModules();
+    const { useChat } = await import("./useChat");
+    const chat = useChat();
+    await chat.loadRecentConversation();
+    expect(chat.messages.value.map((m) => m.id)).toEqual(["1", "2", "4"]);
+    expect(asAssistant(chat.messages.value[1]).blocks).toEqual([kpi]);
+    expect(asAssistant(chat.messages.value[2]).blocks).toBeUndefined();
+  });
 });
+

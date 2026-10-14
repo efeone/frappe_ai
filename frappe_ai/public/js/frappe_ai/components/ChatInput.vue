@@ -36,6 +36,7 @@
 				<span v-else v-html="frappeIcon('send-horizontal', 'sm', 'current-color')" />
 			</button>
 		</div>
+			<slot name="footer" />
 	</div>
 </template>
 

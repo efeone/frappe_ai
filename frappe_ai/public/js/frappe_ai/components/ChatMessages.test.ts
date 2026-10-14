@@ -8,6 +8,12 @@ import type { Message } from "../types/messages";
 const stubs = {
   MessageBubble: { props: ["message"], template: '<div class="stub-bubble" />' },
   ToolCallCard: { props: ["toolCall"], template: '<div class="stub-toolcard" />' },
+  ToolConfirmCard: {
+    props: ["toolConfirm", "canAllowConversation"],
+    emits: ["allow", "deny"],
+    template:
+      '<div class="stub-confirmcard" @click="$emit(\'allow\', toolConfirm.id, true)" />',
+  },
 };
 
 describe("ChatMessages", () => {
@@ -60,5 +66,31 @@ describe("ChatMessages", () => {
     expect(wrapper.findAll(".stub-toolcard")).toHaveLength(1);
     // Empty state is gone once we have messages.
     expect(wrapper.find(".frappe-ai-empty-state").exists()).toBe(false);
+  });
+
+  it("routes tool_confirm messages to ToolConfirmCard and relays allow upward", async () => {
+    const messages: Message[] = [
+      {
+        id: "1",
+        role: "tool_confirm",
+        content: "",
+        toolConfirm: {
+          id: "c1",
+          name: "create_document",
+          arguments: { doctype: "Customer" },
+          status: "pending",
+        },
+        timestamp: null,
+      },
+    ];
+    const wrapper = mount(ChatMessages, {
+      props: { messages, canAllowConversation: true },
+      global: { stubs },
+    });
+    const card = wrapper.find(".stub-confirmcard");
+    expect(card.exists()).toBe(true);
+    expect(wrapper.find(".stub-bubble").exists()).toBe(false);
+    await card.trigger("click");
+    expect(wrapper.emitted("allow")).toEqual([["c1", true]]);
   });
 });

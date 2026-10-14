@@ -7,6 +7,8 @@ from urllib.parse import urlparse
 import frappe
 from frappe.model.document import Document
 
+from frappe_ai.api import confirm
+
 
 class AIAssistantSettings(Document):
 	def onload(self):
@@ -34,6 +36,8 @@ class AIAssistantSettings(Document):
 			frappe.throw(frappe._("Sidebar width must be between 300 and 600 pixels."))
 		if self.keyboard_shortcut:
 			_validate_shortcut(self.keyboard_shortcut)
+		if self.write_approval and self.write_approval not in confirm.MODES:
+			frappe.throw(frappe._("Write Approval must be one of: {0}.").format(", ".join(confirm.MODES)))
 		if self.mcp_url:
 			self.mcp_url = self.mcp_url.strip().rstrip("/")
 			parsed = urlparse(self.mcp_url)

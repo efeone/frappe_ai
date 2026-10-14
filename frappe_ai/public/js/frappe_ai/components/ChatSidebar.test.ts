@@ -22,7 +22,9 @@ const InputStub = defineComponent({
   emits: ["send", "stop"],
   template: '<div class="stub-input" />',
 });
+const ToolbarStub = defineComponent({ name: "ChatToolbar", template: '<div class="stub-toolbar" />' });
 const stubs = {
+  ChatToolbar: ToolbarStub,
   ChatHeader: HeaderStub,
   ChatMessages: MessagesStub,
   ChatInput: InputStub,
