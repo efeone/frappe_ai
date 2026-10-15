@@ -52,6 +52,9 @@ class AIAssistantSettings(Document):
 			self.forge_allowed_ips = ",".join(connection.parse_ips(self.forge_allowed_ips))
 		if self.forge_read_roles:
 			self.forge_read_roles = "\n".join(connection.parse_roles(self.forge_read_roles))
+		from frappe_ai.frappeforge import deploy
+
+		deploy.validate_autonomy(self)
 
 	def on_update(self):
 		if self.forge_user and self.forge_status == "Active":

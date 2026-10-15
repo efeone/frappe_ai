@@ -25,6 +25,9 @@
   "col_forge_1",
   "forge_allowed_ips",
   "forge_read_roles",
+  "forge_autonomy",
+  "forge_autonomy_approver",
+  "forge_autonomous_doctypes",
   "section_forge_agent",
   "forge_user",
   "forge_oauth_client",
@@ -94,7 +97,7 @@
   },
   {
    "default": "380",
-   "description": "Chat panel width in pixels. Range 300–600.",
+   "description": "Chat panel width in pixels. Range 300\u2013600.",
    "fieldname": "sidebar_width",
    "fieldtype": "Int",
    "label": "Sidebar Width"
@@ -152,6 +155,31 @@
    "fieldname": "forge_read_roles",
    "fieldtype": "Small Text",
    "label": "Additional Read Roles"
+  },
+  {
+   "default": "Approve each change",
+   "description": "Whether Vyogo Forge AI's changes wait for a System Manager. With \"Apply what the skills cover\", a change applies itself when every record is a type listed below and none of it runs code (scripts, web forms, notifications always wait). It is applied as the approver below, logged in the Change Log, and can be rolled back.",
+   "fieldname": "forge_autonomy",
+   "fieldtype": "Select",
+   "label": "Forge Autonomy",
+   "options": "Approve each change\nApply what the skills cover"
+  },
+  {
+   "depends_on": "eval:doc.forge_autonomy=='Apply what the skills cover'",
+   "description": "A System Manager who answers for changes that apply themselves; they are made with this user's permissions.",
+   "fieldname": "forge_autonomy_approver",
+   "fieldtype": "Link",
+   "label": "Approve As",
+   "options": "User",
+   "mandatory_depends_on": "eval:doc.forge_autonomy=='Apply what the skills cover'"
+  },
+  {
+   "default": "Custom Field\nProperty Setter\nPrint Format\nLetter Head\nWorkspace\nLead\nCRM Lead\nFCRM Note",
+   "depends_on": "eval:doc.forge_autonomy=='Apply what the skills cover'",
+   "description": "One DocType per line: the record types the assistant's writes skills govern. Types that run code and Desk-only types are refused.",
+   "fieldname": "forge_autonomous_doctypes",
+   "fieldtype": "Small Text",
+   "label": "Record Types Applied Without Approval"
   },
   {
    "collapsible": 1,

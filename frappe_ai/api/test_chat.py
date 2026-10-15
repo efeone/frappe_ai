@@ -589,13 +589,16 @@ class TestStartStreamConfirmation(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError):
 			chat.start_stream(session_id="conv-1", confirmation="{nope")
 
-	@patch("frappe.enqueue")
-	def test_read_only_site_refuses_to_mint(self, mock_enqueue):
+	def test_read_only_site_refuses_to_mint(self):
 		settings = frappe.get_single("AI Assistant Settings")
 		settings.write_approval = self.confirm.MODE_READ_ONLY
+		# outside the mock: saving re-syncs an active Forge connection's user, which enqueues its own job
 		settings.save(ignore_version=True)
-		with self.assertRaises(frappe.ValidationError):
-			chat.start_stream(session_id="conv-1", confirmation={"tool": "create_document", "arguments": {}})
+		with patch("frappe.enqueue") as mock_enqueue:
+			with self.assertRaises(frappe.ValidationError):
+				chat.start_stream(
+					session_id="conv-1", confirmation={"tool": "create_document", "arguments": {}}
+				)
 		mock_enqueue.assert_not_called()
 
 

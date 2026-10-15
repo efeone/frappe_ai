@@ -68,6 +68,21 @@ PROPOSAL_DENIED_DOCTYPES = frozenset(
 	}
 )
 DEFAULT_PROPOSAL_TTL_DAYS = 14
+AUTONOMY_OFF = "Approve each change"
+AUTONOMY_SKILLS = "Apply what the skills cover"
+#: The record types the assistant's ``writes`` skills govern (custom-field, print-format, letter-head,
+#: lead-create), and the Workspace a Frappe package carries for its module (Forge's
+#: frappe-workspace-builder). ``always-ask`` skills (client-script, user-create, user-access) are never here.
+DEFAULT_AUTONOMOUS_DOCTYPES = (
+	"Custom Field",
+	"Property Setter",
+	"Print Format",
+	"Letter Head",
+	"Workspace",
+	"Lead",
+	"CRM Lead",
+	"FCRM Note",
+)
 _VERSION = re.compile(r"-(\d+\.\d+\.\d+)\.tar\.gz$")
 _SAVE_METADATA = {"name", "doctype", "creation", "modified", "modified_by", "owner", "idx", "docstatus"}
 
@@ -126,6 +141,7 @@ def propose(
 		}
 	).insert(ignore_permissions=True)
 	doc.db_set("release_file", file.file_url)
+	_maybe_apply_itself(doc, info["records"] + extras)
 	return _proposal_summary(doc.name)
 
 
@@ -172,7 +188,10 @@ def propose_records(
 			"records_json": json.dumps(records, indent=1, default=str),
 		}
 	)
-	return _insert_proposal(doc, key) or _proposal_summary(doc.name)
+	if winner := _insert_proposal(doc, key):
+		return winner
+	_maybe_apply_itself(doc, records)
+	return _proposal_summary(doc.name)
 
 
 def _insert_proposal(doc, key: str | None) -> dict | None:
@@ -301,6 +320,79 @@ def approve(name: str) -> dict:
 		name,
 		{"status": "Approved", "approved_by": frappe.session.user, "approved_at": now_datetime()},
 	)
+	_enqueue_apply(name)
+	return _proposal_summary(name)
+
+
+def autonomous_doctypes_from(value: str | None) -> list[str]:
+	"""The setting's lines; a blank list means the shipped default (to allow none, turn autonomy off)."""
+	lines = [line.strip() for line in (value or "").splitlines() if line.strip()]
+	return lines or list(DEFAULT_AUTONOMOUS_DOCTYPES)
+
+
+def validate_autonomy(settings) -> None:
+	"""AI Assistant Settings: what may apply itself, and who answers for it."""
+	if settings.forge_autonomy != AUTONOMY_SKILLS:
+		return
+	approver = settings.forge_autonomy_approver
+	if not approver:
+		frappe.throw(_("Choose the System Manager that changes applied without approval are made as."))
+	if problem := _approver_problem(approver):
+		frappe.throw(problem)
+	for doctype in autonomous_doctypes_from(settings.forge_autonomous_doctypes):
+		if doctype in PROPOSAL_DENIED_DOCTYPES:
+			frappe.throw(_("{0} records are changed in Desk only.").format(doctype))
+		if doctype in release.EXECUTABLE_DOCTYPES:
+			frappe.throw(_("{0} runs code, so its changes always wait for approval.").format(doctype))
+		if doctype not in DEFAULT_AUTONOMOUS_DOCTYPES and not frappe.db.exists("DocType", doctype):
+			frappe.throw(_("{0} is not a DocType on this site.").format(doctype))
+
+
+def _autonomous_doctypes() -> set[str]:
+	value = frappe.db.get_single_value("AI Assistant Settings", "forge_autonomous_doctypes")
+	return set(autonomous_doctypes_from(value))
+
+
+def _approver_problem(user: str) -> str:
+	if connection.is_agent_user(user) or not frappe.db.get_value("User", user, "enabled"):
+		return _("The approver must be an enabled person, not the agent.")
+	if "System Manager" not in frappe.get_roles(user):
+		return _("The approver {0} is not a System Manager.").format(user)
+	return ""
+
+
+def _autonomy_problem(records: list[dict], approver: str) -> str:
+	"""Why this change must wait for a person, or "" when the site lets it apply itself."""
+	if problem := _approver_problem(approver):
+		return problem
+	if code := sorted({r["doctype"] for r in records if r["doctype"] in release.EXECUTABLE_DOCTYPES}):
+		return _("It runs code ({0}), which always waits for approval.").format(", ".join(code))
+	allowed = _autonomous_doctypes()
+	if outside := sorted({r["doctype"] for r in records if r["doctype"] not in allowed}):
+		return _("{0} is not a record type that applies without approval.").format(", ".join(outside))
+	return ""
+
+
+def _maybe_apply_itself(doc, records: list[dict]) -> None:
+	"""Approve a new proposal as the site's approver when Forge Autonomy covers all of it."""
+	settings = frappe.get_single("AI Assistant Settings")
+	if settings.forge_autonomy != AUTONOMY_SKILLS:
+		return
+	approver = settings.forge_autonomy_approver or ""
+	if problem := _autonomy_problem(records, approver):
+		doc.db_set("autonomy_note", problem)
+		return
+	doc.db_set(
+		{"status": "Approved", "approved_by": approver, "approved_at": now_datetime(), "auto_approved": 1}
+	)
+	user = frappe.session.user
+	try:
+		_enqueue_apply(doc.name)
+	finally:
+		frappe.set_user(user)  # applying in the request (tests) runs as the approver
+
+
+def _enqueue_apply(name: str) -> None:
 	frappe.enqueue(
 		"frappe_ai.frappeforge.deploy.apply_release",
 		queue="long",
@@ -310,7 +402,6 @@ def approve(name: str) -> dict:
 		now=bool(frappe.flags.in_test),
 		name=name,
 	)
-	return _proposal_summary(name)
 
 
 def reject(name: str, reason: str = "") -> None:
@@ -432,7 +523,11 @@ def _caller_connection(require_usable: bool = True) -> dict:
 def _proposal_summary(name: str, fresh: bool = False) -> dict:
 	"""``fresh``: a locking read, for a row another transaction committed after this one began."""
 	row = frappe.db.get_value(
-		PROPOSAL, name, ["name", "package", "version", "status"], as_dict=True, for_update=fresh
+		PROPOSAL,
+		name,
+		["name", "package", "version", "status", "auto_approved", "autonomy_note"],
+		as_dict=True,
+		for_update=fresh,
 	)
 	return {**row, "approve_url": get_url_to_form(PROPOSAL, name)}
 

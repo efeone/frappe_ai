@@ -564,3 +564,145 @@ class TestProposeRecords(DeployTestCase):
 		)
 		with self.assertRaises(frappe.ValidationError):
 			deploy.records_from_tool("run_sql", "ToDo", "", {})
+
+
+def _set_autonomy(
+	mode: str, approver: str = "Administrator", doctypes: str = "Custom Field\nWorkspace\nToDo"
+):
+	settings = frappe.get_single("AI Assistant Settings")
+	settings.forge_autonomy = mode
+	settings.forge_autonomy_approver = approver if mode == deploy.AUTONOMY_SKILLS else None
+	settings.forge_autonomous_doctypes = doctypes
+	settings.save(ignore_permissions=True)
+
+
+class TestAutonomy(DeployTestCase):
+	"""With the site's yes, a change the skills cover applies itself; everything else still waits."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.tarball = _build_release()
+		frappe.delete_doc("Custom Field", FIELD, ignore_permissions=True, force=True)
+		frappe.db.commit()
+
+	def setUp(self):
+		super().setUp()
+		self.todo = frappe.get_doc({"doctype": "ToDo", "description": "ff autonomous"}).insert()
+
+	def tearDown(self):
+		super().tearDown()
+		# applying commits, so the setting is put back for the tests that follow
+		_set_autonomy(deploy.AUTONOMY_OFF)
+		frappe.db.commit()
+
+	def propose_records(self, records):
+		frappe.set_user(self.conn["user"])
+		try:
+			return deploy.propose_records(records)
+		finally:
+			frappe.set_user("Administrator")
+
+	def update_todo(self, description="ff by forge"):
+		return [
+			{
+				"doctype": "ToDo",
+				"name": self.todo.name,
+				"action": "Update",
+				"data": {"description": description},
+			}
+		]
+
+	def proposal(self, name):
+		return frappe.get_doc(deploy.PROPOSAL, name)
+
+	def test_it_is_off_until_the_site_turns_it_on(self):
+		self.assertEqual(
+			frappe.get_meta("AI Assistant Settings").get_field("forge_autonomy").default, deploy.AUTONOMY_OFF
+		)
+		_set_autonomy(deploy.AUTONOMY_OFF)
+		out = self.propose_records(self.update_todo())
+		self.assertEqual(self.proposal(out["name"]).status, "Pending")
+		self.assertEqual(frappe.db.get_value("ToDo", self.todo.name, "description"), "ff autonomous")
+
+	def test_a_change_the_skills_cover_applies_itself_as_the_approver(self):
+		_set_autonomy(deploy.AUTONOMY_SKILLS)
+		out = self.propose_records(self.update_todo())
+		self.assertEqual(out["auto_approved"], 1)  # Forge is told
+		doc = self.proposal(out["name"])
+		self.assertEqual((doc.status, doc.approved_by, doc.auto_approved), ("Applied", "Administrator", 1))
+		self.assertEqual(frappe.db.get_value("ToDo", self.todo.name, "description"), "ff by forge")
+		change = frappe.get_value(deploy.CHANGE_LOG, {"proposed_release": doc.name}, "name")
+		deploy.rollback(change)
+		self.assertEqual(frappe.db.get_value("ToDo", self.todo.name, "description"), "ff autonomous")
+
+	def test_a_release_the_skills_cover_applies_itself(self):
+		_set_autonomy(deploy.AUTONOMY_SKILLS)
+		out = self.propose()
+		doc = self.proposal(out["name"])
+		self.assertEqual(doc.status, "Applied", (doc.autonomy_note, doc.error))
+		self.assertTrue(frappe.db.exists("Custom Field", FIELD))
+
+	def test_a_record_type_outside_the_skills_waits_and_says_why(self):
+		_set_autonomy(deploy.AUTONOMY_SKILLS, doctypes="Custom Field")
+		out = self.propose_records(self.update_todo())
+		doc = self.proposal(out["name"])
+		self.assertEqual((doc.status, doc.auto_approved), ("Pending", 0))
+		self.assertIn("ToDo", doc.autonomy_note)
+		self.assertEqual(frappe.db.get_value("ToDo", self.todo.name, "description"), "ff autonomous")
+
+	def test_a_change_that_runs_code_always_waits(self):
+		_set_autonomy(deploy.AUTONOMY_SKILLS)
+		with patch.object(deploy, "_autonomous_doctypes", return_value={"Client Script", "ToDo"}):
+			out = self.propose_records(
+				[
+					{
+						"doctype": "Client Script",
+						"name": "",
+						"action": "Create",
+						"data": {"dt": "ToDo", "script": "1"},
+					}
+				]
+			)
+		doc = self.proposal(out["name"])
+		self.assertEqual(doc.status, "Pending")
+		self.assertIn("runs code", doc.autonomy_note)
+
+	def test_an_approver_who_lost_system_manager_stops_autonomy(self):
+		_set_autonomy(deploy.AUTONOMY_SKILLS)
+		with patch.object(deploy.frappe, "get_roles", return_value=["Desk User"]):
+			out = self.propose_records(self.update_todo())
+		doc = self.proposal(out["name"])
+		self.assertEqual(doc.status, "Pending")
+		self.assertIn("System Manager", doc.autonomy_note)
+
+	def test_the_setting_refuses_unsafe_choices(self):
+		for doctypes in ("Client Script", "Server Script", "User", "Custom DocPerm", "No Such DocType"):
+			with self.assertRaises(frappe.ValidationError, msg=doctypes):
+				_set_autonomy(deploy.AUTONOMY_SKILLS, doctypes=doctypes)
+		with self.assertRaises(frappe.ValidationError):
+			_set_autonomy(deploy.AUTONOMY_SKILLS, approver="")
+		with self.assertRaises(frappe.ValidationError):
+			_set_autonomy(deploy.AUTONOMY_SKILLS, approver=self.conn["user"])
+
+	def test_the_default_scope_is_what_the_writes_skills_govern(self):
+		self.assertEqual(
+			set(deploy.DEFAULT_AUTONOMOUS_DOCTYPES),
+			{
+				"Custom Field",
+				"Property Setter",
+				"Print Format",
+				"Letter Head",
+				"Workspace",
+				"Lead",
+				"CRM Lead",
+				"FCRM Note",
+			},
+		)
+
+	def test_a_blank_list_means_the_shipped_default(self):
+		for blank in (None, "", "  \n "):
+			self.assertEqual(
+				deploy.autonomous_doctypes_from(blank), list(deploy.DEFAULT_AUTONOMOUS_DOCTYPES), repr(blank)
+			)
+		self.assertEqual(deploy.autonomous_doctypes_from(" Lead \n\nCustom Field "), ["Lead", "Custom Field"])

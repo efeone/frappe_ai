@@ -24,6 +24,8 @@
   "section_outcome",
   "approved_by",
   "approved_at",
+  "auto_approved",
+  "autonomy_note",
   "rejected_reason",
   "import_log",
   "error"
@@ -152,6 +154,21 @@
    "fieldname": "approved_at",
    "fieldtype": "Datetime",
    "label": "Approved At",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Applied without a person's approval, under the site's Forge Autonomy setting.",
+   "fieldname": "auto_approved",
+   "fieldtype": "Check",
+   "label": "Approved Automatically",
+   "read_only": 1
+  },
+  {
+   "description": "Why this change waited for approval though Forge Autonomy is on.",
+   "fieldname": "autonomy_note",
+   "fieldtype": "Small Text",
+   "label": "Autonomy Note",
    "read_only": 1
   },
   {

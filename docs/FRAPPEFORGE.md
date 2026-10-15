@@ -36,6 +36,15 @@ When FrappeForge proposes a change it appears under **FrappeForge Proposed Relea
 
 Proposals nobody answers expire after 14 days.
 
+## Let FrappeForge apply changes itself
+
+By default every change waits for you. In **AI Assistant Settings → Vyogo Forge AI**, set **Forge Autonomy** to *Apply what the skills cover* to let routine changes through:
+
+- A proposal applies itself only when every record in it is one of the **Record Types Applied Without Approval**, and none of it runs code. The default list is what the assistant's writes skills govern: Custom Field, Property Setter, Print Format, Letter Head, Workspace, Lead, CRM Lead and FCRM Note.
+- Records that run code (Client and Server Scripts, Web Forms, Notifications, Web Templates, Website Themes) always wait, and so do Workflows, Reports and anything outside the list. The setting refuses those types, and Desk-only types such as User and Role.
+- **Approve As** is a System Manager who answers for these changes. The change is made with that user's permissions, so Frappe's own permission checks still apply. If they stop being a System Manager or are disabled, everything waits again.
+- A change that applied itself is marked **Approved Automatically** and logged and rolled back like any other. When autonomy is on but a change waits, **Autonomy Note** says why.
+
 ## Roll back
 
 Every record an applied release touched has a **FrappeForge Change Log** entry holding the version before and after.
