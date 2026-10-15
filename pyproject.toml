@@ -26,9 +26,9 @@ build-backend = "flit_core.buildapi"
 # package_name = "~=1.1.0"
 
 [tool.pyrefly]
-# `frappe` is provided by the bench at runtime, not installed in the local venv.
-# Treat it as Any only when the import cannot be resolved.
-ignore-missing-imports = ["frappe", "frappe.*"]
+# `frappe` and `werkzeug` are provided by the bench at runtime, not installed in the local venv.
+# Treat them as Any only when the import cannot be resolved.
+ignore-missing-imports = ["frappe", "frappe.*", "werkzeug", "werkzeug.*"]
 
 [tool.ruff]
 line-length = 110
