@@ -14,6 +14,7 @@ from frappe_ai.api import direct_write
 
 LOG = "AI External Write Log"
 NO_ROLES_USER = "external-writer@example.test"
+FORGE_USER = "direct-write-test@vyogoforge.invalid"
 
 
 def _set_mode(mode: str):
@@ -247,8 +248,15 @@ class TestAuthorize(_DirectCase):
 		self.assertFalse(direct_write.authorize("create_document", "ToDo")["ok"])
 
 	def test_vyogo_forge_ai_is_told_to_propose(self):
+		# the log links the user, so the agent user must exist, as it does on a site with a Forge connection
+		if not frappe.db.exists("User", FORGE_USER):
+			frappe.get_doc(
+				{"doctype": "User", "email": FORGE_USER, "first_name": "Forge", "send_welcome_email": 0}
+			).insert(ignore_permissions=True)
+		self.addCleanup(frappe.delete_doc, "User", FORGE_USER, ignore_permissions=True, force=True)
+		self.addCleanup(frappe.db.delete, LOG, {"user": FORGE_USER})
 		_set_mode(direct_write.MODE_ALL)
-		ok, reason = self.decide("update_document", "ToDo", "TODO-1", user="forge-agent@vyogoforge.invalid")
+		ok, reason = self.decide("update_document", "ToDo", "TODO-1", user=FORGE_USER)
 		self.assertFalse(ok)
 		self.assertEqual(reason, direct_write.PROPOSE)
 		row = frappe.get_all(LOG, fields=["outcome"], order_by="creation desc", limit=1)[0]
