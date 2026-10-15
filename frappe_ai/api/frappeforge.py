@@ -49,6 +49,18 @@ def propose_release(
 
 
 @frappe.whitelist(methods=["POST"])
+def propose_change(
+	tool: str, doctype: str, name: str = "", data=None, summary: str = "", idempotency_key: str = ""
+) -> dict:
+	"""A write Vyogo Forge AI asked frappe-mcp-server to make, filed as a proposal instead."""
+	_limit("propose", PROPOSALS_PER_HOUR)
+	if isinstance(data, str):
+		data = json.loads(data) if data else None
+	records = deploy.records_from_tool(tool, doctype, name, data)
+	return deploy.propose_records(records, summary=summary, idempotency_key=idempotency_key)
+
+
+@frappe.whitelist(methods=["POST"])
 def request_rollback(change: str) -> dict:
 	_limit("request_rollback", ROLLBACK_REQUESTS_PER_HOUR)
 	deploy.request_rollback(change)

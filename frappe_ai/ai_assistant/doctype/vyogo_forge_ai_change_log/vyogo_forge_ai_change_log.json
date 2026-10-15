@@ -40,7 +40,7 @@
    "fieldname": "action",
    "fieldtype": "Select",
    "label": "Action",
-   "options": "Create\nUpdate\nRollback",
+   "options": "Create\nUpdate\nDelete\nRollback",
    "read_only": 1,
    "in_list_view": 1
   },
@@ -130,7 +130,7 @@
   }
  ],
  "links": [],
- "modified": "2026-10-10 00:00:00.000000",
+ "modified": "2026-10-15 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Assistant",
  "name": "Vyogo Forge AI Change Log",

@@ -5,6 +5,10 @@ Manager approves in Desk; the release is then applied here by a background job r
 approver's authority: the Package Import, the Workflow records that packages do not carry, and one
 ``FrappeForge Change Log`` row per record with the version before and after. ``rollback`` restores
 a row's previous version (or deletes what the release created).
+
+A proposal is either a package release (``propose``: a Frappe Package Release tarball) or a set of
+record changes (``propose_records``: what the agent asked frappe-mcp-server to create, update or
+delete). Both are approved, applied, logged and rolled back the same way.
 """
 
 import json
@@ -29,6 +33,40 @@ EXTRA_DOCTYPES = {
 	"Report": "report_name",
 }
 MAX_PENDING_PER_CONNECTION = 50
+MAX_RECORDS_PER_PROPOSAL = 200
+RECORD_ACTIONS = ("Create", "Update", "Delete")
+#: What each write tool of frappe-mcp-server proposes.
+_TOOL_ACTIONS = {
+	"create_document": "Create",
+	"create_documents": "Create",
+	"update_document": "Update",
+	"delete_document": "Delete",
+}
+#: Records no proposal changes: who may do what on this site, and the records that govern the
+#: assistant and Vyogo Forge AI themselves. DocTypes and modules arrive in a package release.
+PROPOSAL_DENIED_DOCTYPES = frozenset(
+	{
+		"User",
+		"Role",
+		"Role Profile",
+		"Has Role",
+		"User Permission",
+		"DocPerm",
+		"Custom DocPerm",
+		"OAuth Client",
+		"OAuth Bearer Token",
+		"OAuth Authorization Code",
+		"System Settings",
+		"DocType",
+		"Module Def",
+		"Package Import",
+		"AI Assistant Settings",
+		"AI Skill",
+		"AI External Write Log",
+		PROPOSAL,
+		CHANGE_LOG,
+	}
+)
 DEFAULT_PROPOSAL_TTL_DAYS = 14
 _VERSION = re.compile(r"-(\d+\.\d+\.\d+)\.tar\.gz$")
 _SAVE_METADATA = {"name", "doctype", "creation", "modified", "modified_by", "owner", "idx", "docstatus"}
@@ -75,19 +113,8 @@ def propose(
 			"extra_records_json": json.dumps(extras, indent=1) if extras else None,
 		}
 	)
-	# The lookup above and this insert are not atomic: a retry racing the first request can get here
-	# too. The unique idempotency key lets exactly one insert win; the other returns that proposal.
-	frappe.db.savepoint("frappeforge_propose")
-	try:
-		doc.insert(ignore_permissions=True)
-	except (frappe.UniqueValidationError, frappe.DuplicateEntryError):
-		if not key:
-			raise
-		frappe.db.rollback(save_point="frappeforge_propose")
-		# a locking read sees the winner's committed row; this transaction's snapshot (REPEATABLE READ) does not
-		return _proposal_summary(
-			frappe.db.get_value(PROPOSAL, {"idempotency_key": key}, "name", for_update=True), fresh=True
-		)
+	if winner := _insert_proposal(doc, key):
+		return winner
 	file = frappe.get_doc(
 		{
 			"doctype": "File",
@@ -100,6 +127,103 @@ def propose(
 	).insert(ignore_permissions=True)
 	doc.db_set("release_file", file.file_url)
 	return _proposal_summary(doc.name)
+
+
+def records_from_tool(tool: str, doctype: str, name: str, data) -> list[dict]:
+	"""The changes a frappe-mcp-server write tool call asks for, as proposal records."""
+	action = _TOOL_ACTIONS.get(tool)
+	if not action:
+		frappe.throw(_("{0} is not a change Vyogo Forge AI can propose.").format(tool or _("This tool")))
+	if tool == "create_documents":
+		rows = data if isinstance(data, list) else []
+		return [{"doctype": doctype, "name": "", "action": "Create", "data": row} for row in rows]
+	return [
+		{
+			"doctype": doctype,
+			"name": "" if action == "Create" else name,
+			"action": action,
+			"data": {} if action == "Delete" else data,
+		}
+	]
+
+
+def propose_records(
+	records: list, summary: str = "", conversation_id: str = "", idempotency_key: str = ""
+) -> dict:
+	"""Store record changes for a System Manager to review; nothing on the site changes yet."""
+	conn = _caller_connection()
+	key = f"{conn['name']}:{idempotency_key}" if idempotency_key else None
+	if key and (existing := frappe.db.get_value(PROPOSAL, {"idempotency_key": key}, "name")):
+		return _proposal_summary(existing)
+	pending = frappe.db.count(PROPOSAL, {"connection": conn["name"], "status": "Pending"})
+	if pending >= MAX_PENDING_PER_CONNECTION:
+		frappe.throw(_("This connection already has {0} releases waiting for approval.").format(pending))
+	records = _validate_records(records)
+	doc = frappe.get_doc(
+		{
+			"doctype": PROPOSAL,
+			"status": "Pending",
+			"has_executable": int(any(r["executable"] for r in records)),
+			"connection": conn["name"],
+			"proposed_by": frappe.session.user,
+			"conversation_id": (conversation_id or "")[:140],
+			"idempotency_key": key,
+			"summary": (summary or "")[:5000],
+			"records_json": json.dumps(records, indent=1, default=str),
+		}
+	)
+	return _insert_proposal(doc, key) or _proposal_summary(doc.name)
+
+
+def _insert_proposal(doc, key: str | None) -> dict | None:
+	"""Insert a proposal; when a retry with the same key won the race, that proposal's summary."""
+	# The caller's key lookup and this insert are not atomic: a retry racing the first request can get
+	# here too. The unique idempotency key lets exactly one insert win; the other returns that proposal.
+	frappe.db.savepoint("frappeforge_propose")
+	try:
+		doc.insert(ignore_permissions=True)
+	except (frappe.UniqueValidationError, frappe.DuplicateEntryError):
+		if not key:
+			raise
+		frappe.db.rollback(save_point="frappeforge_propose")
+		# a locking read sees the winner's committed row; this transaction's snapshot (REPEATABLE READ) does not
+		return _proposal_summary(
+			frappe.db.get_value(PROPOSAL, {"idempotency_key": key}, "name", for_update=True), fresh=True
+		)
+	return None
+
+
+def _validate_records(records) -> list[dict]:
+	if not isinstance(records, list) or not records:
+		frappe.throw(_("A proposal needs at least one change."))
+	if len(records) > MAX_RECORDS_PER_PROPOSAL:
+		frappe.throw(_("At most {0} changes per proposal.").format(MAX_RECORDS_PER_PROPOSAL))
+	out = []
+	for record in records:
+		if not isinstance(record, dict):
+			frappe.throw(_("A change could not be read."))
+		doctype, name, action = record.get("doctype"), record.get("name") or "", record.get("action")
+		data = record.get("data")
+		if not isinstance(doctype, str) or not frappe.db.exists("DocType", doctype):
+			frappe.throw(_("{0} is not a DocType on this site.").format(doctype))
+		if doctype in PROPOSAL_DENIED_DOCTYPES:
+			frappe.throw(_("{0} records are changed in Desk only.").format(doctype))
+		if action not in RECORD_ACTIONS:
+			frappe.throw(_("A change is one of {0}.").format(", ".join(RECORD_ACTIONS)))
+		if action != "Create" and not name:
+			frappe.throw(_("A change to an existing {0} needs its name.").format(doctype))
+		if not isinstance(data, dict) or (action == "Update" and not data):
+			frappe.throw(_("A change to {0} carries no fields.").format(doctype))
+		out.append(
+			{
+				"doctype": doctype,
+				"name": str(name),
+				"action": action,
+				"executable": doctype in release.EXECUTABLE_DOCTYPES,
+				"data": data,
+			}
+		)
+	return out
 
 
 def status() -> dict:
@@ -206,6 +330,11 @@ def apply_release(name: str) -> None:
 	doc.db_set("status", "Applying")
 	frappe.db.savepoint("frappeforge_apply")
 	try:
+		if not doc.release_file:  # record changes, no package
+			for record in json.loads(doc.records_json or "[]"):
+				_apply_record(doc, record)
+			doc.db_set({"status": "Applied", "error": None})
+			return
 		info = release.inspect_release(_release_path(doc.release_file))
 		extras = json.loads(doc.extra_records_json or "[]")
 		targets = [(r["doctype"], r["name"]) for r in info["records"]]
@@ -263,13 +392,14 @@ def preview(doc) -> list[dict]:
 	out = []
 	for record in json.loads(doc.records_json or "[]"):
 		current = _snapshot(record["doctype"], record["name"])
+		action = record.get("action") or ("Update" if current else "Create")
 		out.append(
 			{
 				"doctype": record["doctype"],
-				"name": record["name"],
+				"name": record["name"] or _("new"),
 				"executable": record.get("executable"),
-				"action": "Update" if current else "Create",
-				"changes": release.diff(current, record["data"]),
+				"action": action,
+				"changes": [] if action == "Delete" else release.diff(current, record["data"]),
 			}
 		)
 	return out
@@ -389,6 +519,24 @@ def _snapshot(doctype: str, name: str) -> dict | None:
 	return json.loads(frappe.as_json(frappe.get_doc(doctype, name).as_dict()))
 
 
+def _apply_record(doc, record: dict) -> None:
+	"""One proposed change, made and logged; a create is logged under the name it was given."""
+	doctype, name, action = record["doctype"], record["name"], record["action"]
+	before = _snapshot(doctype, name)
+	data = {k: v for k, v in (record.get("data") or {}).items() if k not in _SAVE_METADATA}
+	if action == "Delete":
+		frappe.delete_doc(doctype, name, ignore_permissions=True)
+		_log_change(doc, (doctype, name), before, None)
+		return
+	if action == "Update":
+		target = frappe.get_doc(doctype, name)
+		target.update(data)
+		target.save(ignore_permissions=True)
+	else:
+		target = frappe.get_doc({"doctype": doctype, **data}).insert(ignore_permissions=True)
+	_log_change(doc, (doctype, target.name), before, _snapshot(doctype, target.name))
+
+
 def _upsert(record: dict) -> None:
 	name = _extra_name(record)
 	data = {k: v for k, v in record.items() if k not in _SAVE_METADATA}
@@ -407,7 +555,8 @@ def _restore(target: tuple[str, str], previous: dict) -> None:
 		doc.update(data)
 		doc.save(ignore_permissions=True)
 	else:
-		frappe.get_doc({"doctype": target[0], "name": target[1], **data}).insert(ignore_permissions=True)
+		# a new document is named afresh unless the name is set at insert
+		frappe.get_doc({"doctype": target[0], **data}).insert(ignore_permissions=True, set_name=target[1])
 
 
 def _log_change(doc, target: tuple[str, str], before: dict | None, after: dict | None) -> None:
@@ -418,7 +567,7 @@ def _log_change(doc, target: tuple[str, str], before: dict | None, after: dict |
 			"doctype": CHANGE_LOG,
 			"proposed_release": doc.name,
 			"connection": doc.connection,
-			"action": "Create" if before is None else "Update",
+			"action": "Create" if before is None else ("Delete" if after is None else "Update"),
 			"status": "Applied",
 			"target_doctype": target[0],
 			"target_name": target[1],
@@ -457,7 +606,7 @@ def render_changes_html(doc) -> str:
 
 	parts = []
 	for change in preview(doc):
-		badge = "orange" if change["action"] == "Update" else "green"
+		badge = {"Update": "orange", "Delete": "red"}.get(change["action"], "green")
 		head = (
 			f'<div class="frappeforge-record" style="margin-bottom:12px">'
 			f'<span class="indicator-pill {badge}">{esc(change["action"])}</span> '

@@ -33,6 +33,9 @@ class TestDecide(unittest.TestCase):
 		("POST", "/api/method/frappe_ai.api.frappeforge.propose_release", None),
 		("GET", "/api/method/frappe_ai.api.frappeforge.status", None),
 		("POST", "/api/method/frappe_ai.api.frappeforge.request_rollback", None),
+		# through frappe-mcp-server: a write becomes a proposal
+		("POST", "/api/method/frappe_ai.api.direct_write.authorize", None),
+		("POST", "/api/method/frappe_ai.api.frappeforge.propose_change", None),
 		("POST", "/", "frappe.client.get"),
 		("GET", "/api/method/frappe.integrations.oauth2.openid_profile", None),
 	)

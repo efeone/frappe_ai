@@ -48,6 +48,9 @@ AGENT_METHODS = frozenset(
 		"frappe_ai.api.frappeforge.status",
 		"frappe_ai.api.frappeforge.propose_release",
 		"frappe_ai.api.frappeforge.request_rollback",
+		# through frappe-mcp-server, whose write tools ask first and then file a proposal
+		"frappe_ai.api.direct_write.authorize",
+		"frappe_ai.api.frappeforge.propose_change",
 	}
 )
 _READ_VERBS = frozenset({"GET", "HEAD"})

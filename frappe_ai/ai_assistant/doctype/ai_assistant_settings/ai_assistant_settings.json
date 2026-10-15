@@ -13,6 +13,7 @@
   "section_changes",
   "write_approval",
   "allow_session_auto_approve",
+  "external_mcp_writes",
   "section_ui",
   "sidebar_width",
   "keyboard_shortcut",
@@ -77,6 +78,14 @@
    "fieldname": "allow_session_auto_approve",
    "fieldtype": "Check",
    "label": "Let Users Turn On Auto-Approval"
+  },
+  {
+   "default": "Read only",
+   "description": "Changes from MCP clients other than this sidebar, such as Claude Desktop or Claude Code, signed in with an API key or OAuth as a user. They change only what that user may change; users, roles, scripts, permissions and the assistant's own settings stay in Desk. Each change is recorded in AI External Write Log.",
+   "fieldname": "external_mcp_writes",
+   "fieldtype": "Select",
+   "label": "Writes from Other MCP Clients",
+   "options": "Read only\nAllow creates and updates\nAllow all changes"
   },
   {
    "fieldname": "section_ui",
@@ -187,7 +196,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-15 01:30:00.000000",
+ "modified": "2026-10-15 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Assistant",
  "name": "AI Assistant Settings",

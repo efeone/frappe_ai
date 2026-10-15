@@ -410,3 +410,157 @@ class TestApprovalPage(DeployTestCase):
 		html = deploy.render_changes_html(frappe.get_doc("Vyogo Forge AI Proposed Release", out["name"]))
 		self.assertIn("Workflow State", html)
 		self.assertIn("FF Review", html)
+
+
+# ── record-level proposals: a write through frappe-mcp-server ─────────────────
+
+
+class TestProposeRecords(DeployTestCase):
+	def setUp(self):
+		super().setUp()
+		self.kept = frappe.get_doc({"doctype": "ToDo", "description": "ff kept"}).insert()
+		self.gone = frappe.get_doc({"doctype": "ToDo", "description": "ff gone"}).insert()
+
+	def propose_records(self, records, **kwargs):
+		frappe.set_user(self.conn["user"])
+		try:
+			return deploy.propose_records(records, **kwargs)
+		finally:
+			frappe.set_user("Administrator")
+
+	def three_changes(self):
+		return [
+			{
+				"doctype": "ToDo",
+				"name": self.kept.name,
+				"action": "Update",
+				"data": {"description": "ff updated"},
+			},
+			{"doctype": "ToDo", "name": "", "action": "Create", "data": {"description": "ff created"}},
+			{"doctype": "ToDo", "name": self.gone.name, "action": "Delete", "data": {}},
+		]
+
+	def test_a_record_change_is_a_pending_proposal_without_a_package(self):
+		out = self.propose_records(self.three_changes(), summary="Tidy ToDos")
+		doc = frappe.get_doc("Vyogo Forge AI Proposed Release", out["name"])
+		self.assertEqual((doc.status, doc.release_file, doc.has_executable), ("Pending", None, 0))
+		self.assertEqual(doc.proposed_by, self.conn["user"])
+		self.assertEqual([r["action"] for r in json.loads(doc.records_json)], ["Update", "Create", "Delete"])
+		# nothing on the site changed yet
+		self.assertEqual(frappe.db.get_value("ToDo", self.kept.name, "description"), "ff kept")
+		self.assertTrue(frappe.db.exists("ToDo", self.gone.name))
+		self.assertIn("/vyogo-forge-ai-proposed-release/", out["approve_url"])
+
+	def test_approval_applies_each_change_and_logs_it(self):
+		out = self.propose_records(self.three_changes())
+		deploy.approve(out["name"])
+		self.assertEqual(
+			frappe.db.get_value("Vyogo Forge AI Proposed Release", out["name"], "status"), "Applied"
+		)
+		self.assertEqual(frappe.db.get_value("ToDo", self.kept.name, "description"), "ff updated")
+		self.assertFalse(frappe.db.exists("ToDo", self.gone.name))
+		created = frappe.db.get_value("ToDo", {"description": "ff created"})
+		self.assertTrue(created)
+		log = {
+			r.action: r
+			for r in frappe.get_all(
+				"Vyogo Forge AI Change Log",
+				filters={"proposed_release": out["name"]},
+				fields=["name", "action", "target_name", "before_json", "after_json"],
+			)
+		}
+		self.assertEqual(set(log), {"Update", "Create", "Delete"})
+		self.assertEqual(log["Create"].target_name, created)
+		self.assertIsNone(log["Delete"].after_json)
+		self.assertIn("ff gone", log["Delete"].before_json)
+
+	def test_every_change_rolls_back(self):
+		out = self.propose_records(self.three_changes())
+		deploy.approve(out["name"])
+		created = frappe.db.get_value("ToDo", {"description": "ff created"})
+		for change in frappe.get_all(
+			"Vyogo Forge AI Change Log", filters={"proposed_release": out["name"]}, pluck="name"
+		):
+			deploy.rollback(change)
+		self.assertEqual(frappe.db.get_value("ToDo", self.kept.name, "description"), "ff kept")
+		self.assertFalse(frappe.db.exists("ToDo", created))
+		self.assertEqual(frappe.db.get_value("ToDo", self.gone.name, "description"), "ff gone")
+
+	def test_a_change_that_runs_code_is_flagged(self):
+		out = self.propose_records(
+			[
+				{
+					"doctype": "Client Script",
+					"name": "",
+					"action": "Create",
+					"data": {"dt": "ToDo", "script": "1"},
+				}
+			]
+		)
+		self.assertEqual(
+			frappe.db.get_value("Vyogo Forge AI Proposed Release", out["name"], "has_executable"), 1
+		)
+
+	def test_privilege_records_are_never_proposed(self):
+		for doctype in (
+			"User",
+			"Role",
+			"Custom DocPerm",
+			"AI Assistant Settings",
+			"OAuth Client",
+			"Vyogo Forge AI Change Log",
+		):
+			with self.assertRaises(frappe.ValidationError, msg=doctype):
+				self.propose_records(
+					[{"doctype": doctype, "name": "x", "action": "Update", "data": {"a": 1}}]
+				)
+
+	def test_malformed_changes_are_refused(self):
+		for bad in (
+			[],
+			[{"doctype": "ToDo", "name": "", "action": "Rename", "data": {}}],
+			[{"doctype": "ToDo", "name": "", "action": "Update", "data": {"description": "x"}}],
+			[{"doctype": "ToDo", "name": "", "action": "Create", "data": "not a dict"}],
+			[{"doctype": "No Such DocType", "name": "", "action": "Create", "data": {}}],
+			[{"doctype": "ToDo", "name": "", "action": "Create", "data": {}}] * 201,
+		):
+			with self.assertRaises(frappe.ValidationError):
+				self.propose_records(bad)
+
+	def test_only_a_forge_connection_proposes(self):
+		with self.assertRaises(frappe.PermissionError):
+			deploy.propose_records(self.three_changes())
+
+	def test_a_retry_returns_the_same_proposal(self):
+		first = self.propose_records(self.three_changes(), idempotency_key="rec-1")
+		second = self.propose_records(self.three_changes(), idempotency_key="rec-1")
+		self.assertEqual(first["name"], second["name"])
+
+	def test_the_approver_sees_each_change(self):
+		out = self.propose_records(self.three_changes())
+		html = deploy.render_changes_html(frappe.get_doc("Vyogo Forge AI Proposed Release", out["name"]))
+		for text in ("Update", "Create", "Delete", "ff updated", "ff created", self.gone.name):
+			self.assertIn(text, html)
+
+	def test_tool_calls_map_to_changes(self):
+		self.assertEqual(
+			deploy.records_from_tool("update_document", "ToDo", "T-1", {"description": "x"}),
+			[{"doctype": "ToDo", "name": "T-1", "action": "Update", "data": {"description": "x"}}],
+		)
+		self.assertEqual(
+			deploy.records_from_tool("create_document", "ToDo", "", {"description": "x"}),
+			[{"doctype": "ToDo", "name": "", "action": "Create", "data": {"description": "x"}}],
+		)
+		self.assertEqual(
+			[
+				r["data"]
+				for r in deploy.records_from_tool("create_documents", "ToDo", "2 rows", [{"a": 1}, {"a": 2}])
+			],
+			[{"a": 1}, {"a": 2}],
+		)
+		self.assertEqual(
+			deploy.records_from_tool("delete_document", "ToDo", "T-1", None),
+			[{"doctype": "ToDo", "name": "T-1", "action": "Delete", "data": {}}],
+		)
+		with self.assertRaises(frappe.ValidationError):
+			deploy.records_from_tool("run_sql", "ToDo", "", {})
