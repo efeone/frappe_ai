@@ -25,7 +25,7 @@ The access token is for your site's own `frappe-mcp-server`, if it has one. Ente
 
 ## Review and approve a release
 
-When FrappeForge proposes a change it appears under **FrappeForge Proposed Release** with status *Pending*.
+When FrappeForge proposes a change it appears under **FrappeForge Proposed Release**. A change Forge Autonomy covers applies itself (see below); anything else waits with status *Pending*.
 
 - **What This Release Changes** is built by your site from the uploaded package itself. Each record shows whether it is created or updated, and the fields that change.
 - A release can contain Custom Fields, Property Setters, Client and Server Scripts, Print Formats, Notifications, Web Forms, Web Pages, Web Templates, Website Themes, Workspaces and custom DocTypes. Workflows and Reports, which packages cannot carry, arrive alongside the package and are listed separately. Anything else is refused when the release is proposed.
@@ -38,11 +38,11 @@ Proposals nobody answers expire after 14 days.
 
 ## Let FrappeForge apply changes itself
 
-By default every change waits for you. In **AI Assistant Settings → Vyogo Forge AI**, set **Forge Autonomy** to *Apply what the skills cover* to let routine changes through:
+**Forge Autonomy** (in **AI Assistant Settings → Vyogo Forge AI**) is *Apply what the skills cover* by default, so routine changes go through without waiting. Set it to *Approve each change* to review everything yourself.
 
 - A proposal applies itself only when every record in it is one of the **Record Types Applied Without Approval**, and none of it runs code. The default list is what the assistant's writes skills govern: Custom Field, Property Setter, Print Format, Letter Head, Workspace, Lead, CRM Lead and FCRM Note.
 - Records that run code (Client and Server Scripts, Web Forms, Notifications, Web Templates, Website Themes) always wait, and so do Workflows, Reports and anything outside the list. The setting refuses those types, and Desk-only types such as User and Role.
-- **Approve As** is a System Manager who answers for these changes. The change is made with that user's permissions, so Frappe's own permission checks still apply. If they stop being a System Manager or are disabled, everything waits again.
+- **Approve As** is a System Manager who answers for these changes; it is Administrator unless you choose someone else. The change is made with that user's permissions, so Frappe's own permission checks still apply. If they stop being a System Manager or are disabled, everything waits again.
 - A change that applied itself is marked **Approved Automatically** and logged and rolled back like any other. When autonomy is on but a change waits, **Autonomy Note** says why.
 
 ## Roll back

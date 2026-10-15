@@ -70,6 +70,7 @@ PROPOSAL_DENIED_DOCTYPES = frozenset(
 DEFAULT_PROPOSAL_TTL_DAYS = 14
 AUTONOMY_OFF = "Approve each change"
 AUTONOMY_SKILLS = "Apply what the skills cover"
+DEFAULT_AUTONOMY_APPROVER = "Administrator"
 #: The record types the assistant's ``writes`` skills govern (custom-field, print-format, letter-head,
 #: lead-create), and the Workspace a Frappe package carries for its module (Forge's
 #: frappe-workspace-builder). ``always-ask`` skills (client-script, user-create, user-access) are never here.
@@ -332,11 +333,12 @@ def autonomous_doctypes_from(value: str | None) -> list[str]:
 
 def validate_autonomy(settings) -> None:
 	"""AI Assistant Settings: what may apply itself, and who answers for it."""
-	if settings.forge_autonomy != AUTONOMY_SKILLS:
+	if not _autonomy_on(settings.forge_autonomy):
 		return
-	approver = settings.forge_autonomy_approver
-	if not approver:
-		frappe.throw(_("Choose the System Manager that changes applied without approval are made as."))
+	settings.forge_autonomy = AUTONOMY_SKILLS
+	settings.forge_autonomy_approver = approver = (
+		settings.forge_autonomy_approver or DEFAULT_AUTONOMY_APPROVER
+	)
 	if problem := _approver_problem(approver):
 		frappe.throw(problem)
 	for doctype in autonomous_doctypes_from(settings.forge_autonomous_doctypes):
@@ -346,6 +348,11 @@ def validate_autonomy(settings) -> None:
 			frappe.throw(_("{0} runs code, so its changes always wait for approval.").format(doctype))
 		if doctype not in DEFAULT_AUTONOMOUS_DOCTYPES and not frappe.db.exists("DocType", doctype):
 			frappe.throw(_("{0} is not a DocType on this site.").format(doctype))
+
+
+def _autonomy_on(mode: str | None) -> bool:
+	"""On unless the site turned it off; a site that never saved the setting has the default, on."""
+	return (mode or AUTONOMY_SKILLS) == AUTONOMY_SKILLS
 
 
 def _autonomous_doctypes() -> set[str]:
@@ -376,9 +383,9 @@ def _autonomy_problem(records: list[dict], approver: str) -> str:
 def _maybe_apply_itself(doc, records: list[dict]) -> None:
 	"""Approve a new proposal as the site's approver when Forge Autonomy covers all of it."""
 	settings = frappe.get_single("AI Assistant Settings")
-	if settings.forge_autonomy != AUTONOMY_SKILLS:
+	if not _autonomy_on(settings.forge_autonomy):
 		return
-	approver = settings.forge_autonomy_approver or ""
+	approver = settings.forge_autonomy_approver or DEFAULT_AUTONOMY_APPROVER
 	if problem := _autonomy_problem(records, approver):
 		doc.db_set("autonomy_note", problem)
 		return

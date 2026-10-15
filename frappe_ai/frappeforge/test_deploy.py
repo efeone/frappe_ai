@@ -75,6 +75,8 @@ class DeployTestCase(unittest.TestCase):
 
 	def setUp(self):
 		frappe.set_user("Administrator")
+		# Forge Autonomy is on by default; most of these tests are about the approval path
+		frappe.db.set_single_value("AI Assistant Settings", "forge_autonomy", deploy.AUTONOMY_OFF)
 		self.conn = connection.create_connection(label="deploy test")
 		frappe.db.delete("Vyogo Forge AI Change Log")
 		frappe.db.delete("Vyogo Forge AI Proposed Release")
@@ -576,6 +578,15 @@ def _set_autonomy(
 	settings.save(ignore_permissions=True)
 
 
+_AUTO_FIELD = {
+	"dt": "ToDo",
+	"fieldname": "ff_auto_field",
+	"label": "FF Auto",
+	"fieldtype": "Data",
+	"insert_after": "description",
+}
+
+
 class TestAutonomy(DeployTestCase):
 	"""With the site's yes, a change the skills cover applies itself; everything else still waits."""
 
@@ -592,8 +603,9 @@ class TestAutonomy(DeployTestCase):
 
 	def tearDown(self):
 		super().tearDown()
-		# applying commits, so the setting is put back for the tests that follow
+		# applying commits, so the setting and what was applied are undone for the tests that follow
 		_set_autonomy(deploy.AUTONOMY_OFF)
+		frappe.delete_doc("Custom Field", "ToDo-ff_auto_field", ignore_permissions=True, force=True)
 		frappe.db.commit()
 
 	def propose_records(self, records):
@@ -616,13 +628,23 @@ class TestAutonomy(DeployTestCase):
 	def proposal(self, name):
 		return frappe.get_doc(deploy.PROPOSAL, name)
 
-	def test_it_is_off_until_the_site_turns_it_on(self):
-		self.assertEqual(
-			frappe.get_meta("AI Assistant Settings").get_field("forge_autonomy").default, deploy.AUTONOMY_OFF
-		)
+	def test_it_is_on_by_default_as_administrator(self):
+		meta = frappe.get_meta("AI Assistant Settings")
+		self.assertEqual(meta.get_field("forge_autonomy").default, deploy.AUTONOMY_SKILLS)
+		self.assertEqual(meta.get_field("forge_autonomy_approver").default, "Administrator")
+		# a site that never saved the new settings
+		for field in ("forge_autonomy", "forge_autonomy_approver", "forge_autonomous_doctypes"):
+			frappe.db.set_single_value("AI Assistant Settings", field, None)
+		lead_like = [{"doctype": "Custom Field", "name": "", "action": "Create", "data": _AUTO_FIELD}]
+		out = self.propose_records(lead_like)
+		doc = self.proposal(out["name"])
+		self.assertEqual((doc.status, doc.approved_by, doc.auto_approved), ("Applied", "Administrator", 1))
+
+	def test_a_site_can_turn_it_off(self):
 		_set_autonomy(deploy.AUTONOMY_OFF)
 		out = self.propose_records(self.update_todo())
 		self.assertEqual(self.proposal(out["name"]).status, "Pending")
+		self.assertEqual(frappe.db.get_value("ToDo", self.todo.name, "description"), "ff autonomous")
 		self.assertEqual(frappe.db.get_value("ToDo", self.todo.name, "description"), "ff autonomous")
 
 	def test_a_change_the_skills_cover_applies_itself_as_the_approver(self):
@@ -680,8 +702,10 @@ class TestAutonomy(DeployTestCase):
 		for doctypes in ("Client Script", "Server Script", "User", "Custom DocPerm", "No Such DocType"):
 			with self.assertRaises(frappe.ValidationError, msg=doctypes):
 				_set_autonomy(deploy.AUTONOMY_SKILLS, doctypes=doctypes)
-		with self.assertRaises(frappe.ValidationError):
-			_set_autonomy(deploy.AUTONOMY_SKILLS, approver="")
+		_set_autonomy(deploy.AUTONOMY_SKILLS, approver="")
+		self.assertEqual(
+			frappe.db.get_single_value("AI Assistant Settings", "forge_autonomy_approver"), "Administrator"
+		)
 		with self.assertRaises(frappe.ValidationError):
 			_set_autonomy(deploy.AUTONOMY_SKILLS, approver=self.conn["user"])
 
