@@ -378,10 +378,13 @@ describe("useChat", () => {
   });
 
   it("CLIENT_TIMEOUT_MS triggers a typed error when the relay never settles", async () => {
-    const { chat } = await setup();
+    const { chat, listeners } = await setup();
     const promise = chat.sendMessage("hang");
-    // CLIENT_TIMEOUT_MS is 120_000; advance just past it.
-    vi.advanceTimersByTime(121_000);
+    // A first chunk arrives (so the fail-fast check is satisfied), then the
+    // stream goes silent. CLIENT_TIMEOUT_MS is 120_000; advance just past it.
+    await vi.advanceTimersByTimeAsync(0);
+    fireChunk(listeners, { type: "content", text: "partial" });
+    await vi.advanceTimersByTimeAsync(121_000);
     await promise; // settles via catch → _addErrorMessage
     const errMsg = chat.messages.value.find((m) => m.role === "error");
     expect(errMsg).toBeDefined();
@@ -521,5 +524,104 @@ describe("useChat", () => {
     expect(asAssistant(chat.messages.value[1]).blocks).toEqual([kpi]);
     expect(asAssistant(chat.messages.value[2]).blocks).toBeUndefined();
   });
+
+  it("restores a failed turn as a notice, not as text with the agent's marker", async () => {
+    g.frappe = {
+      call: vi.fn((opts: { method: string; callback?: (r: unknown) => void }) => {
+        if (opts.method === "frappe_ai.api.chat.get_recent_messages") {
+          opts.callback?.({
+            message: {
+              session_id: "conv-10",
+              messages: [
+                { id: "1", role: "user", content: "hi", timestamp: null },
+                { id: "2", role: "assistant", content: "[error] The answer could not be completed. Try again.", timestamp: null },
+                { id: "3", role: "assistant", content: "Part of it.\n\n[incomplete] The answer stopped early.", timestamp: null },
+              ],
+            },
+          });
+        }
+        return Promise.resolve();
+      }),
+      realtime: { on: vi.fn(), off: vi.fn() },
+    };
+    vi.resetModules();
+    const { useChat } = await import("./useChat");
+    const chat = useChat();
+    await chat.loadRecentConversation();
+    const [, failed, partial, note] = chat.messages.value;
+    expect(failed.role).toBe("error");
+    expect(failed.role === "error" && failed.error.message).toBe("The answer could not be completed. Try again.");
+    expect(asAssistant(partial).content).toBe("Part of it.");
+    expect(note.role === "error" && note.error.message).toBe("The answer stopped early.");
+    expect(chat.messages.value).toHaveLength(4);
+  });
 });
 
+
+describe("useChat — failing fast", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("refuses to send when the realtime socket is down, with a clear message", async () => {
+    const { chat, startStreamCall } = await setup();
+    (g.frappe as { realtime: Record<string, unknown> }).realtime.socket = {
+      connected: false,
+      once: vi.fn(),
+      off: vi.fn(),
+    };
+    const sending = chat.sendMessage("Show open invoices over 30 days");
+    await vi.advanceTimersByTimeAsync(3_100);
+    await sending;
+
+    expect(startStreamCall).not.toHaveBeenCalled();
+    const err = chat.messages.value.find((m) => m.role === "error");
+    expect(err?.content).toMatch(/live connection to this site is down/i);
+    expect(chat.messages.value.some((m) => m.role === "assistant")).toBe(false);
+    expect(chat.isLoading.value).toBe(false);
+  });
+
+  it("sends once a connecting socket comes up within the grace period", async () => {
+    const { chat, listeners, startStreamCall } = await setup();
+    const socket = {
+      connected: false,
+      once: vi.fn((_ev: string, h: () => void) =>
+        setTimeout(() => {
+          socket.connected = true;
+          h();
+        }, 500),
+      ),
+      off: vi.fn(),
+    };
+    (g.frappe as { realtime: Record<string, unknown> }).realtime.socket = socket;
+    const sending = chat.sendMessage("hi");
+    await vi.advanceTimersByTimeAsync(600);
+    expect(startStreamCall).toHaveBeenCalled();
+    fireChunk(listeners, { type: "done", tools_called: [] });
+    await sending;
+    expect(chat.messages.value.some((m) => m.role === "error")).toBe(false);
+  });
+
+  it("stops after 30s with no reply at all, and cancels the server side", async () => {
+    const { chat } = await setup();
+    const sending = chat.sendMessage("Show open invoices over 30 days");
+    await vi.advanceTimersByTimeAsync(30_100);
+    await sending;
+
+    const err = chat.messages.value.find((m) => m.role === "error");
+    expect(err?.content).toMatch(/hasn't started replying after 30 seconds/i);
+    const calls = (g.frappe as { call: { mock: { calls: Array<[{ method: string }]> } } }).call.mock
+      .calls;
+    expect(calls.some(([o]) => o.method === "frappe_ai.api.chat.cancel_stream")).toBe(true);
+  });
+
+  it("does not fire the 30s check once a reply has started", async () => {
+    const { chat, listeners } = await setup();
+    const sending = chat.sendMessage("long question");
+    await vi.advanceTimersByTimeAsync(0);
+    fireChunk(listeners, { type: "content", text: "Thinking it through" });
+    await vi.advanceTimersByTimeAsync(60_000);
+    fireChunk(listeners, { type: "done", tools_called: [] });
+    await sending;
+    expect(chat.messages.value.some((m) => m.role === "error")).toBe(false);
+  });
+});

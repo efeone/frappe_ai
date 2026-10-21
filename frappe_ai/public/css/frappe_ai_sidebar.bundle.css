@@ -237,9 +237,12 @@
   overflow: hidden;
 }
 
+/* A light wash of the accent, not a solid fill: a brand colour that suits a
+   button is too loud across a whole conversation, and body text stays the
+   site's own colour on any accent. */
 .frappe-ai-bubble--user .frappe-ai-bubble-content {
-  background: var(--ai-accent);
-  color: var(--ai-accent-fg);
+  background: color-mix(in srgb, var(--ai-accent) 14%, var(--bg-color));
+  color: var(--text-color);
   border-bottom-right-radius: 4px;
 }
 
@@ -273,14 +276,21 @@
   40% { opacity: 1; transform: scale(1.1); }
 }
 
+/* Times appear on hover so they don't stack up under every line. */
 .frappe-ai-bubble-time {
   font-size: 10px;
   color: var(--text-muted);
   margin-top: 2px;
   padding: 0 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.frappe-ai-bubble:hover .frappe-ai-bubble-time,
+.frappe-ai-bubble:focus-within .frappe-ai-bubble-time {
+  opacity: 1;
 }
 
-/* Error messages */
+/* Something went wrong: a quiet notice in the conversation, not an alarm. */
 .frappe-ai-error {
   border-radius: 8px;
   padding: 8px 12px;
@@ -291,12 +301,12 @@
 }
 
 .frappe-ai-error--info {
-  background: var(--blue-highlight, #f0f5ff);
-  border-color: var(--indicator-blue, #3498db);
-  color: var(--blue-dark, #2176ae);
+  background: var(--ai-bubble-assistant-bg);
+  border-color: var(--orange-400, #f6a04d);
+  color: var(--text-color);
 }
 
-.frappe-ai-error-message { font-weight: 500; }
+.frappe-ai-error-message { font-weight: 400; }
 .frappe-ai-error-suggestion { font-size: 12px; margin-top: 4px; opacity: 0.8; }
 
 /* Markdown content */
@@ -1032,3 +1042,12 @@
 .frappe-ai-model-option--active { background: var(--bg-light-gray, var(--control-bg)); }
 .frappe-ai-model-option--current { font-weight: 600; }
 .frappe-ai-model-empty { padding: 6px 8px; font-size: 11px; color: var(--text-muted); }
+
+/* The assistant's mark, when the site or its host sets one (Branding). */
+.frappe-ai-header-logo {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+  margin-right: 6px;
+}

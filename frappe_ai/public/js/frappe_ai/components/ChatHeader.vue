@@ -1,6 +1,18 @@
 <script setup lang="ts">
 import { frappeIcon } from "../utils/frappe-icon";
 
+withDefaults(
+	defineProps<{
+		/** The assistant's name; the neutral default unless the site or its host brands it. */
+		name?: string;
+		/** A short line after the name, e.g. who provides it. Hidden when empty. */
+		byline?: string;
+		/** A small square mark before the name. Hidden when empty. */
+		logoUrl?: string;
+	}>(),
+	{ name: "AI Sidebar", byline: "", logoUrl: "" },
+);
+
 const emit = defineEmits<{
 	clear: [];
 	close: [];
@@ -11,8 +23,9 @@ const emit = defineEmits<{
 <template>
 	<div class="frappe-ai-header">
 		<div class="frappe-ai-header-left">
-			<span class="frappe-ai-header-title">AI Sidebar</span>
-			<span class="frappe-ai-header-brand">from Vyogo</span>
+			<img v-if="logoUrl" class="frappe-ai-header-logo" :src="logoUrl" alt="" />
+			<span class="frappe-ai-header-title">{{ name }}</span>
+			<span v-if="byline" class="frappe-ai-header-brand">{{ byline }}</span>
 		</div>
 		<div class="frappe-ai-header-actions">
 			<button

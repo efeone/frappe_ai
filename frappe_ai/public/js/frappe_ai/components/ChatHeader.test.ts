@@ -3,12 +3,22 @@ import { mount } from "@vue/test-utils";
 import ChatHeader from "./ChatHeader.vue";
 
 describe("ChatHeader", () => {
-  it("renders the app title, the brand and three icon buttons", () => {
+  it("renders a neutral title, no byline or logo, and three icon buttons by default", () => {
     const wrapper = mount(ChatHeader);
-    expect(wrapper.text()).toContain("AI Sidebar");
-    expect(wrapper.text()).toContain("from Vyogo");
+    expect(wrapper.find(".frappe-ai-header-title").text()).toBe("AI Sidebar");
+    expect(wrapper.find(".frappe-ai-header-brand").exists()).toBe(false);
+    expect(wrapper.find("img.frappe-ai-header-logo").exists()).toBe(false);
     const buttons = wrapper.findAll("button.frappe-ai-icon-btn");
     expect(buttons).toHaveLength(3);
+  });
+
+  it("shows the configured name, byline and logo", () => {
+    const wrapper = mount(ChatHeader, {
+      props: { name: "Wren", byline: "from Example", logoUrl: "/files/mark.png" },
+    });
+    expect(wrapper.find(".frappe-ai-header-title").text()).toBe("Wren");
+    expect(wrapper.find(".frappe-ai-header-brand").text()).toBe("from Example");
+    expect(wrapper.find("img.frappe-ai-header-logo").attributes("src")).toBe("/files/mark.png");
   });
 
   it("emits 'history' from the history button", async () => {

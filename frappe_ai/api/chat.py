@@ -485,6 +485,24 @@ def start_stream(
 	return {"session_id": session_id}
 
 
+# Connecting to the agent is quick or it is not happening: fail in seconds,
+# not after the full read timeout. Overridable per site.
+DEFAULT_AGENT_CONNECT_TIMEOUT = 5
+AGENT_UNREACHABLE_MESSAGE = (
+	"The AI agent is not available right now. Please try again later; "
+	"if it keeps happening, contact your administrator."
+)
+
+
+def _agent_connect_timeout() -> float:
+	raw = frappe.local.conf.get("frappe_ai_agent_connect_timeout")
+	try:
+		value = float(raw) if raw not in (None, "") else DEFAULT_AGENT_CONNECT_TIMEOUT
+	except (TypeError, ValueError):
+		return DEFAULT_AGENT_CONNECT_TIMEOUT
+	return value if value > 0 else DEFAULT_AGENT_CONNECT_TIMEOUT
+
+
 # Shown in place of the confirmation card when the site is read-only for the assistant.
 READ_ONLY_NOTE = "This change was not made: the AI Sidebar is not allowed to change data on this site."
 
@@ -662,7 +680,9 @@ class _Relay:
 				"json": payload,
 				"cookies": {"sid": self.sid},
 				"headers": headers,
-				"timeout": self.timeout_seconds,
+				# (connect, read): an unreachable agent fails in seconds, while a
+				# long answer still gets the full read timeout.
+				"timeout": (_agent_connect_timeout(), self.timeout_seconds),
 				"stream": True,
 			}
 			if verify_ssl is not None:
@@ -715,6 +735,15 @@ class _Relay:
 
 					self._publish(chunk)
 
+		except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError) as e:
+			# Checked before Timeout: ConnectTimeout is both. Nothing was sent.
+			self.logger.error(
+				"stream.unreachable session=%s after=%dms err=%s", self.session_id, self._elapsed_ms(), e
+			)
+			frappe.log_error(title="AI Agent Unreachable", message=f"{self.agent_url}: {e}")
+			self._publish({"type": "error", "message": AGENT_UNREACHABLE_MESSAGE})
+			self.done_received = True
+			self.done_source = "error"
 		except requests.exceptions.Timeout:
 			self.logger.warning(
 				"stream.timeout session=%s after=%dms chunks=%d",
@@ -722,9 +751,30 @@ class _Relay:
 				self._elapsed_ms(),
 				self.chunk_count,
 			)
-			self._publish({"type": "error", "message": "Request timed out. Please try again."})
+			self._publish(
+				{
+					"type": "error",
+					"message": _(
+						"The AI assistant didn't finish answering within {0} seconds. Please try again."
+					).format(self.timeout_seconds),
+				}
+			)
 			self.done_received = True
 			self.done_source = "timeout"
+		except requests.exceptions.HTTPError as e:
+			status = getattr(e.response, "status_code", None)
+			self.logger.error("stream.http_error session=%s status=%s", self.session_id, status)
+			frappe.log_error(title="AI Agent Stream Failed", message=str(e))
+			self._publish(
+				{
+					"type": "error",
+					"message": _("The AI assistant returned an error (HTTP {0}). Please try again.").format(
+						status
+					),
+				}
+			)
+			self.done_received = True
+			self.done_source = "error"
 		except requests.exceptions.RequestException as e:
 			self.logger.error(
 				"stream.failed session=%s after=%dms chunks=%d err=%s",
@@ -734,7 +784,7 @@ class _Relay:
 				e,
 			)
 			frappe.log_error(title="AI Agent Stream Failed", message=str(e))
-			self._publish({"type": "error", "message": "Failed to connect to AI agent."})
+			self._publish({"type": "error", "message": AGENT_UNREACHABLE_MESSAGE})
 			self.done_received = True
 			self.done_source = "error"
 

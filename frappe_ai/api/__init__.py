@@ -2,12 +2,15 @@
 
 import frappe
 
-from frappe_ai.api import confirm
-
 
 @frappe.whitelist()
 def get_settings() -> dict:
 	"""Return AI Assistant Settings for the frontend sidebar."""
+	# Imported here, not at the top: a package that imports its own modules while
+	# it loads deadlocks a threaded worker whose first requests arrive together
+	# (one thread holds this package and waits for `confirm`, another the reverse).
+	from frappe_ai.api import branding, confirm
+
 	settings = frappe.get_single("AI Assistant Settings")
 	write_approval = getattr(settings, "write_approval", None)
 	return {
@@ -20,4 +23,6 @@ def get_settings() -> dict:
 		# these to know whether to offer "Allow all in this conversation".
 		"write_approval": write_approval if write_approval in confirm.MODES else confirm.MODE_ASK,
 		"allow_session_auto_approve": bool(getattr(settings, "allow_session_auto_approve", 0)),
+		# Name, byline, logo and accent: the host's site_config first, then the form.
+		**branding.resolve(settings),
 	}

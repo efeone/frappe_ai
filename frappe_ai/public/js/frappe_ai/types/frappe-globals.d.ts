@@ -71,6 +71,16 @@ interface FrappeRealtime {
    */
   on: <T = unknown>(event: string, handler: (data: T) => void) => void;
   off: (event: string, handler?: (data: unknown) => void) => void;
+  /**
+   * The underlying socket.io client, when Frappe has opened one. Absent on
+   * builds without realtime; `connected` is false while it is (re)connecting
+   * or after the server refused it (e.g. "Unauthorized").
+   */
+  socket?: {
+    connected: boolean;
+    once?: (event: string, handler: (...args: unknown[]) => void) => void;
+    off?: (event: string, handler?: (...args: unknown[]) => void) => void;
+  };
 }
 
 interface FrappeUIKeys {

@@ -2,13 +2,14 @@
 import { computed, onMounted, ref } from "vue";
 import { useChat } from "../composables/useChat";
 import { useSettings, WRITE_APPROVAL_ASK } from "../composables/useSettings";
+import { accentForeground, isAccent } from "../utils/accent";
 import ChatHeader from "./ChatHeader.vue";
 import ChatToolbar from "./ChatToolbar.vue";
 import ChatHistory from "./ChatHistory.vue";
 import ChatMessages from "./ChatMessages.vue";
 import ChatInput from "./ChatInput.vue";
 
-defineProps<{
+const props = defineProps<{
 	sidebarWidth: number;
 	keyboardShortcut: string;
 }>();
@@ -36,6 +37,18 @@ async function openConversation(id: string) {
 }
 
 const { settings } = useSettings();
+
+// The width, plus the brand accent when the site or its host set one: it
+// overrides the stylesheet's neutral --ai-accent for everything inside.
+const sidebarStyle = computed(() => {
+	const style: Record<string, string> = { width: props.sidebarWidth + "px" };
+	const accent = settings.value.accentColor;
+	if (isAccent(accent)) {
+		style["--ai-accent"] = accent;
+		style["--ai-accent-fg"] = accentForeground(accent) as string;
+	}
+	return style;
+});
 
 // The offer only makes sense where cards are shown at all, and only when the
 // administrator turned it on.
@@ -76,8 +89,15 @@ function handleClose() {
 </script>
 
 <template>
-	<div class="frappe-ai-sidebar" :style="{ width: sidebarWidth + 'px' }">
-		<ChatHeader @clear="handleClear" @close="handleClose" @history="showHistory = !showHistory" />
+	<div class="frappe-ai-sidebar" :style="sidebarStyle">
+		<ChatHeader
+			:name="settings.assistantName"
+			:byline="settings.assistantByline"
+			:logo-url="settings.assistantLogoUrl"
+			@clear="handleClear"
+			@close="handleClose"
+			@history="showHistory = !showHistory"
+		/>
 		<ChatHistory
 			v-if="showHistory"
 			:current-id="currentConversation()"

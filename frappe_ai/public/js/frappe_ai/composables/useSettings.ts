@@ -10,6 +10,11 @@ export interface FrappeAISettings {
   writeApproval: string;
   /** Whether the card may offer "Allow all in this conversation". */
   allowSessionAutoApprove: boolean;
+  /** How the assistant presents itself; the server has already validated these. */
+  assistantName: string;
+  assistantByline: string;
+  assistantLogoUrl: string;
+  accentColor: string;
 }
 
 interface FrappeAISettingsResponse {
@@ -18,6 +23,10 @@ interface FrappeAISettingsResponse {
   keyboard_shortcut?: string;
   write_approval?: string;
   allow_session_auto_approve?: boolean;
+  assistant_name?: string;
+  assistant_byline?: string;
+  assistant_logo_url?: string;
+  accent_color?: string;
 }
 
 export const WRITE_APPROVAL_ASK = "Ask every time";
@@ -29,6 +38,10 @@ const DEFAULT_SETTINGS: FrappeAISettings = {
   keyboardShortcut: "Alt+/",
   writeApproval: WRITE_APPROVAL_ASK,
   allowSessionAutoApprove: false,
+  assistantName: "AI Sidebar",
+  assistantByline: "",
+  assistantLogoUrl: "",
+  accentColor: "",
 };
 
 const settings: Ref<FrappeAISettings> = ref({ ...DEFAULT_SETTINGS });
@@ -53,6 +66,10 @@ export function useSettings() {
           keyboardShortcut: msg.keyboard_shortcut ?? "Alt+/",
           writeApproval: msg.write_approval ?? WRITE_APPROVAL_ASK,
           allowSessionAutoApprove: msg.allow_session_auto_approve ?? false,
+          assistantName: msg.assistant_name || DEFAULT_SETTINGS.assistantName,
+          assistantByline: msg.assistant_byline ?? "",
+          assistantLogoUrl: msg.assistant_logo_url ?? "",
+          accentColor: msg.accent_color ?? "",
         };
       }
     } catch {

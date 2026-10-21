@@ -17,6 +17,12 @@
   "section_ui",
   "sidebar_width",
   "keyboard_shortcut",
+  "section_branding",
+  "assistant_name",
+  "assistant_byline",
+  "col_branding",
+  "assistant_logo",
+  "accent_color",
   "section_vyogo_forge",
   "forge_status",
   "forge_label",
@@ -97,7 +103,7 @@
   },
   {
    "default": "380",
-   "description": "Chat panel width in pixels. Range 300\u2013600.",
+   "description": "Chat panel width in pixels. Range 300–600.",
    "fieldname": "sidebar_width",
    "fieldtype": "Int",
    "label": "Sidebar Width"
@@ -220,11 +226,48 @@
    "label": "Revoked By",
    "options": "User",
    "read_only": 1
+  },
+  {
+   "fieldname": "section_branding",
+   "fieldtype": "Section Break",
+   "label": "Branding",
+   "collapsible": 1,
+   "description": "How the assistant presents itself in the sidebar. A host that manages this site can set these in site_config (frappe_ai_assistant_name, _byline, _logo_url, _accent); those win over the values here."
+  },
+  {
+   "fieldname": "assistant_name",
+   "fieldtype": "Data",
+   "label": "Assistant Name",
+   "default": "AI Sidebar",
+   "length": 60
+  },
+  {
+   "fieldname": "assistant_byline",
+   "fieldtype": "Data",
+   "label": "Byline",
+   "length": 60,
+   "description": "A short line shown after the name, e.g. who provides the assistant. Leave empty for none."
+  },
+  {
+   "fieldname": "col_branding",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "assistant_logo",
+   "fieldtype": "Attach Image",
+   "label": "Logo",
+   "description": "A small square mark shown before the name."
+  },
+  {
+   "fieldname": "accent_color",
+   "fieldtype": "Color",
+   "label": "Accent Colour",
+   "description": "Fills the send button and your own messages. Text on it switches between dark and white for contrast. Empty keeps the neutral default."
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-10-15 09:00:00.000000",
+ "modified": "2026-10-22 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Assistant",
  "name": "AI Assistant Settings",

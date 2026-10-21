@@ -26,6 +26,10 @@ describe("useSettings", () => {
       keyboardShortcut: "Alt+/",
       writeApproval: "Ask every time",
       allowSessionAutoApprove: false,
+      assistantName: "AI Sidebar",
+      assistantByline: "",
+      assistantLogoUrl: "",
+      accentColor: "",
     });
   });
 
@@ -52,6 +56,33 @@ describe("useSettings", () => {
       keyboardShortcut: "Mod+Shift+A",
       writeApproval: "Ask every time",
       allowSessionAutoApprove: false,
+      assistantName: "AI Sidebar",
+      assistantByline: "",
+      assistantLogoUrl: "",
+      accentColor: "",
+    });
+  });
+
+  it("loads the branding the server resolved", async () => {
+    g.frappe = {
+      call: vi.fn().mockResolvedValue({
+        message: {
+          enabled: true,
+          assistant_name: "Wren",
+          assistant_byline: "from Example",
+          assistant_logo_url: "/files/mark.png",
+          accent_color: "#14b8a6",
+        },
+      }),
+    };
+    const { useSettings } = await import("./useSettings");
+    const { settings, loadSettings } = useSettings();
+    await loadSettings();
+    expect(settings.value).toMatchObject({
+      assistantName: "Wren",
+      assistantByline: "from Example",
+      assistantLogoUrl: "/files/mark.png",
+      accentColor: "#14b8a6",
     });
   });
 
@@ -66,6 +97,10 @@ describe("useSettings", () => {
       keyboardShortcut: "Alt+/",
       writeApproval: "Ask every time",
       allowSessionAutoApprove: false,
+      assistantName: "AI Sidebar",
+      assistantByline: "",
+      assistantLogoUrl: "",
+      accentColor: "",
     });
   });
 
@@ -90,6 +125,10 @@ describe("useSettings", () => {
       keyboardShortcut: "Alt+/",
       writeApproval: "Ask every time",
       allowSessionAutoApprove: false,
+      assistantName: "AI Sidebar",
+      assistantByline: "",
+      assistantLogoUrl: "",
+      accentColor: "",
     });
   });
 

@@ -24,6 +24,7 @@
 import { ref, readonly } from "vue";
 import type { AssistantMessage, Message, ToolConfirmMessage } from "../types/messages";
 import { getPageContext } from "../utils/context";
+import { newId } from "../utils/id";
 
 interface Chunk {
   type: "content" | "content_block" | "tool_call" | "tool_confirm" | "done" | "error" | "session";
@@ -62,6 +63,49 @@ interface StreamResult {
 // A user-visible "timed out" is preferable to a never-resolving spinner
 // if everything else breaks.
 const CLIENT_TIMEOUT_MS = 120_000;
+
+// Fail fast when nothing comes back at all. Every reply, even one that ends
+// in a tool call or an error, starts with a chunk; a turn with no chunk after
+// this long is not slow, it is lost (the worker died, or the reply has no way
+// to reach this tab). Stop it, tell the user, and stop the server side too.
+const FIRST_CHUNK_TIMEOUT_MS = 30_000;
+
+// Replies travel over Frappe's realtime socket. Give a socket that is still
+// connecting this long before treating it as down.
+const REALTIME_GRACE_MS = 3_000;
+
+export const REALTIME_DOWN_MESSAGE =
+  "The live connection to this site is down, so the assistant's reply can't be shown. " +
+  "Refresh the page and try again. If it keeps happening, contact your administrator.";
+export const NO_REPLY_MESSAGE =
+  "The AI assistant hasn't started replying after 30 seconds, so this request was stopped. " +
+  "Please try again.";
+
+// How the agent marks a saved turn that failed, or stopped before it finished.
+const FAILED_MARKER = "[error]";
+const INCOMPLETE_MARKER = "\n\n[incomplete]";
+
+/** Resolves true when the realtime socket is (or becomes) connected within
+ *  `graceMs`. A Frappe build without a socket object resolves true: nothing
+ *  to check, and the timeouts below still bound the wait. */
+function _waitForRealtime(graceMs: number): Promise<boolean> {
+  const socket = frappe.realtime?.socket;
+  if (!socket || socket.connected) return Promise.resolve(true);
+  if (!socket.once) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    let done = false;
+    const onConnect = () => finish(true);
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      socket.off?.("connect", onConnect);
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(socket.connected), graceMs);
+    socket.once!("connect", onConnect);
+  });
+}
 
 // Frappe's `frappe.call` rejects with a plain object (not Error) shaped like
 //   { exc_type, _server_messages, exception, message? }
@@ -122,7 +166,7 @@ export function useChat() {
     if (!content.trim() || isLoading.value) return;
 
     const userMessage: Message = {
-      id: crypto.randomUUID(),
+      id: newId(),
       role: "user",
       content,
       timestamp: new Date(),
@@ -179,7 +223,18 @@ export function useChat() {
     isLoading.value = true;
     lastError.value = null;
 
-    const assistantId = crypto.randomUUID();
+    // No live connection means no way for the reply to reach this tab. Say so
+    // now instead of spinning, and don't spend an agent turn on it. Only a
+    // socket that exists and is not connected costs a wait; the usual path
+    // stays synchronous so the placeholder appears immediately.
+    const socket = frappe.realtime?.socket;
+    if (socket && !socket.connected && !(await _waitForRealtime(REALTIME_GRACE_MS))) {
+      _addErrorMessage(REALTIME_DOWN_MESSAGE);
+      isLoading.value = false;
+      return;
+    }
+
+    const assistantId = newId();
     const assistantMessage: Message = {
       id: assistantId,
       role: "assistant",
@@ -200,6 +255,7 @@ export function useChat() {
     // paths run their side effects before Promise.race could disambiguate.
     let settled = false;
     let timerId: ReturnType<typeof setTimeout> | undefined;
+    let firstChunkTimerId: ReturnType<typeof setTimeout> | undefined;
 
     try {
       // Reuse the conversation's session id if we already have one so the
@@ -207,7 +263,7 @@ export function useChat() {
       // message in a conversation mints a fresh id; subsequent ones reuse
       // it. The agent's "session" chunk (below) may override with the
       // canonical id it persisted.
-      const sessionId = _conversationId ?? crypto.randomUUID();
+      const sessionId = _conversationId ?? newId();
       _conversationId = sessionId;
       const eventName = `frappe_ai:chunk:${sessionId}`;
       _activeEventName = eventName;
@@ -223,6 +279,10 @@ export function useChat() {
           if (timerId !== undefined) {
             clearTimeout(timerId);
             timerId = undefined;
+          }
+          if (firstChunkTimerId !== undefined) {
+            clearTimeout(firstChunkTimerId);
+            firstChunkTimerId = undefined;
           }
           frappe.realtime.off(eventName);
           canCancel.value = false;
@@ -256,6 +316,12 @@ export function useChat() {
 
         frappe.realtime.on(eventName, (chunk: Chunk) => {
           if (settled) return;
+          // Anything arriving proves the reply path works; from here the
+          // silence timeout (CLIENT_TIMEOUT_MS) bounds a slow answer.
+          if (firstChunkTimerId !== undefined) {
+            clearTimeout(firstChunkTimerId);
+            firstChunkTimerId = undefined;
+          }
           armTimer();
           if (chunk.type === "session" && chunk.id) {
             // The agent persisted the conversation under this canonical id
@@ -308,11 +374,11 @@ export function useChat() {
             const assistantIdx = messages.value.findIndex((m) => m.id === assistantId);
             if (assistantIdx < 0) return;
             const toolCallMessage: Message = {
-              id: crypto.randomUUID(),
+              id: newId(),
               role: "tool_call",
               content: "",
               toolCall: {
-                call_id: crypto.randomUUID(),
+                call_id: newId(),
                 name: chunk.name,
                 arguments: chunk.arguments ?? {},
                 status: "done",
@@ -328,7 +394,7 @@ export function useChat() {
             const assistantIdx = messages.value.findIndex((m) => m.id === assistantId);
             if (assistantIdx < 0) return;
             const confirmMessage: Message = {
-              id: crypto.randomUUID(),
+              id: newId(),
               role: "tool_confirm",
               content: "",
               toolConfirm: {
@@ -371,6 +437,11 @@ export function useChat() {
         // settlement path, so a late chunk arriving after the timer
         // can't add a second error bubble.
         armTimer();
+        firstChunkTimerId = setTimeout(() => {
+          if (settled) return;
+          _serverCancelInFlight();
+          settle("reject", new Error(NO_REPLY_MESSAGE));
+        }, FIRST_CHUNK_TIMEOUT_MS);
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to get response";
@@ -478,12 +549,25 @@ export function useChat() {
       // hydrated row). Better to omit than to mislabel them as user input.
       messages.value = result.messages
         .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m): Message => {
+        .flatMap((m): Message[] => {
           const timestamp = m.timestamp ? new Date(m.timestamp) : null;
-          if (m.role === "user") return { id: m.id, role: "user", content: m.content, timestamp };
+          if (m.role === "user") return [{ id: m.id, role: "user", content: m.content, timestamp }];
+          // the agent saves a failed turn as "[error] why" and one cut short as
+          // "text\n\n[incomplete] why": show the why as the notice it was live
+          const notice = (id: string, text: string): Message => ({
+            id, role: "error", content: text, timestamp, error: { code: "ANSWER_FAILED", message: text },
+          });
+          const content = m.content || "";
+          if (content.startsWith(FAILED_MARKER)) return [notice(m.id, content.slice(FAILED_MARKER.length).trim())];
+          const cut = content.lastIndexOf(INCOMPLETE_MARKER);
           // no `parts` on a restored reply: the bubble renders its text, then its cards
           const blocks = Array.isArray(m.blocks) ? m.blocks : [];
-          return { id: m.id, role: "assistant", content: m.content, timestamp, ...(blocks.length ? { blocks } : {}) };
+          const reply: Message = {
+            id: m.id, role: "assistant", content: cut >= 0 ? content.slice(0, cut).trimEnd() : content,
+            timestamp, ...(blocks.length ? { blocks } : {}),
+          };
+          if (cut < 0) return [reply];
+          return [reply, notice(`${m.id}:note`, content.slice(cut + INCOMPLETE_MARKER.length).trim())];
         })
         // a reply with neither text nor a card has nothing to show
         .filter((m) => m.role !== "assistant" || !!m.content || !!m.blocks?.length);
@@ -542,7 +626,7 @@ export function useChat() {
   function _addErrorMessage(message: string): void {
     lastError.value = message;
     messages.value.push({
-      id: crypto.randomUUID(),
+      id: newId(),
       role: "error",
       content: message,
       error: { code: "REQUEST_FAILED", message },
