@@ -9,7 +9,8 @@
  * inject a small link back to `/app/ai-assistant-settings`.
  *
  * Regular users still see nothing — they can't enable it anyway, so a
- * dead link would be confusing.
+ * dead link would be confusing. Nor does anyone when the host turned it off
+ * (`managed`): the settings form cannot turn it back on.
  */
 
 export type BootDecision = "mount-sidebar" | "show-disabled-hint" | "hidden";
@@ -18,11 +19,14 @@ const PRIVILEGED_ROLES = new Set(["System Manager", "Administrator"]);
 
 export interface BootDecisionInput {
   enabled: boolean;
+  /** Turned off by the host (site_config), not by the settings form. */
+  managed?: boolean;
   roles: string[];
 }
 
 export function decideBoot(input: BootDecisionInput): BootDecision {
   if (input.enabled) return "mount-sidebar";
+  if (input.managed) return "hidden";
   const hasPrivilegedRole = (input.roles || []).some((r) => PRIVILEGED_ROLES.has(r));
   return hasPrivilegedRole ? "show-disabled-hint" : "hidden";
 }

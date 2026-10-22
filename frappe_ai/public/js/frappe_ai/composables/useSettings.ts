@@ -4,6 +4,8 @@ import { ref, readonly, type Ref } from "vue";
 
 export interface FrappeAISettings {
   enabled: boolean;
+  /** Turned off by the host, so the settings form cannot turn it back on. */
+  enabledManaged: boolean;
   sidebarWidth: number;
   keyboardShortcut: string;
   /** The site's answer to a write the agent wants to make; "Ask every time" shows a card. */
@@ -19,6 +21,7 @@ export interface FrappeAISettings {
 
 interface FrappeAISettingsResponse {
   enabled?: boolean;
+  enabled_managed?: boolean;
   sidebar_width?: number;
   keyboard_shortcut?: string;
   write_approval?: string;
@@ -42,6 +45,7 @@ const DEFAULT_SETTINGS: FrappeAISettings = {
   assistantByline: "",
   assistantLogoUrl: "",
   accentColor: "",
+  enabledManaged: false,
 };
 
 const settings: Ref<FrappeAISettings> = ref({ ...DEFAULT_SETTINGS });
@@ -70,6 +74,7 @@ export function useSettings() {
           assistantByline: msg.assistant_byline ?? "",
           assistantLogoUrl: msg.assistant_logo_url ?? "",
           accentColor: msg.accent_color ?? "",
+          enabledManaged: msg.enabled_managed ?? false,
         };
       }
     } catch {

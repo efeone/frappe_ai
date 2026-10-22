@@ -6,7 +6,7 @@ import frappe
 import requests
 from frappe import _
 
-from frappe_ai.api import confirm
+from frappe_ai.api import availability, confirm
 
 # Upper bound on the user's single-message payload. Mirrors the agent's
 # own 32 000-char Pydantic cap with a stricter ceiling because the relay
@@ -446,6 +446,8 @@ def start_stream(
 		frappe.throw(_("Authentication required"), frappe.AuthenticationError)
 
 	settings = frappe.get_single("AI Assistant Settings")
+	if availability.switched_off_by_host():
+		frappe.throw(_("The AI assistant is turned off for this site."))
 	if not settings.enabled:
 		frappe.throw(_("AI Assistant is not enabled"))
 

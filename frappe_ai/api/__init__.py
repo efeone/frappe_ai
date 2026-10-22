@@ -9,12 +9,14 @@ def get_settings() -> dict:
 	# Imported here, not at the top: a package that imports its own modules while
 	# it loads deadlocks a threaded worker whose first requests arrive together
 	# (one thread holds this package and waits for `confirm`, another the reverse).
-	from frappe_ai.api import branding, confirm
+	from frappe_ai.api import availability, branding, confirm
 
 	settings = frappe.get_single("AI Assistant Settings")
 	write_approval = getattr(settings, "write_approval", None)
 	return {
-		"enabled": bool(settings.enabled),
+		"enabled": availability.is_enabled(settings),
+		# Turned off by the host (site_config), so the form cannot turn it back on.
+		"enabled_managed": availability.switched_off_by_host(),
 		"sidebar_width": getattr(settings, "sidebar_width", None) or 380,
 		# Keep the fallback in sync with the doctype default — `Ctrl+/` is
 		# reserved by Frappe v16 (toggle left sidebar) so we can't use it.

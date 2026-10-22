@@ -304,7 +304,11 @@ onFrappeReady(async () => {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const roles = ((frappe as any).user_roles as string[]) || [];
-  const decision = decideBoot({ enabled: settings.value.enabled, roles });
+  const decision = decideBoot({
+    enabled: settings.value.enabled,
+    managed: settings.value.enabledManaged,
+    roles,
+  });
   if (decision === "hidden") return;
   if (decision === "show-disabled-hint") {
     injectDisabledHint();

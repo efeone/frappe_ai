@@ -24,4 +24,9 @@ describe("decideBoot", () => {
   it("empty role list with disabled = hidden", () => {
     expect(decideBoot({ enabled: false, roles: [] })).toBe("hidden");
   });
+
+  it("shows no enable hint when the host turned it off: the settings form cannot undo that", () => {
+    expect(decideBoot({ enabled: false, managed: true, roles: ["System Manager"] })).toBe("hidden");
+    expect(decideBoot({ enabled: false, managed: true, roles: ["Administrator"] })).toBe("hidden");
+  });
 });

@@ -4,6 +4,7 @@ import frappe
 import requests
 from frappe import _
 
+from frappe_ai.api import availability
 from frappe_ai.api.chat import _agent_ssl_verify, _bench_url, _validate_agent_url
 
 
@@ -16,6 +17,8 @@ def test_connection():
 	"""Test connectivity to the AI agent by calling its /health endpoint."""
 	settings = frappe.get_single("AI Assistant Settings")
 
+	if availability.switched_off_by_host():
+		return {"success": False, "message": "The AI assistant is turned off for this site."}
 	if not settings.enabled:
 		return {"success": False, "message": "AI Assistant is not enabled"}
 

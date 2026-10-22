@@ -30,6 +30,7 @@ describe("useSettings", () => {
       assistantByline: "",
       assistantLogoUrl: "",
       accentColor: "",
+      enabledManaged: false,
     });
   });
 
@@ -60,6 +61,7 @@ describe("useSettings", () => {
       assistantByline: "",
       assistantLogoUrl: "",
       accentColor: "",
+      enabledManaged: false,
     });
   });
 
@@ -101,6 +103,7 @@ describe("useSettings", () => {
       assistantByline: "",
       assistantLogoUrl: "",
       accentColor: "",
+      enabledManaged: false,
     });
   });
 
@@ -129,6 +132,7 @@ describe("useSettings", () => {
       assistantByline: "",
       assistantLogoUrl: "",
       accentColor: "",
+      enabledManaged: false,
     });
   });
 
@@ -144,5 +148,14 @@ describe("useSettings", () => {
     expect(settings.value.enabled).toBe(true);
     expect(settings.value.sidebarWidth).toBe(380);
     expect(settings.value.keyboardShortcut).toBe("Alt+/");
+  });
+
+  it("reports when the host has turned the assistant off", async () => {
+    g.frappe = { call: vi.fn().mockResolvedValue({ message: { enabled: false, enabled_managed: true } }) };
+    const { useSettings } = await import("./useSettings");
+    const { settings, loadSettings } = useSettings();
+    await loadSettings();
+    expect(settings.value.enabled).toBe(false);
+    expect(settings.value.enabledManaged).toBe(true);
   });
 });
