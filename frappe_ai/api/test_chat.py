@@ -5,7 +5,9 @@
 whitelisted endpoints (with the agent + RQ enqueue mocked out)."""
 
 import json
+import os
 import unittest
+import unittest.mock
 from unittest.mock import patch
 
 import frappe
@@ -119,6 +121,11 @@ class TestValidateAgentUrl(unittest.TestCase):
 class TestAgentSslVerify(unittest.TestCase):
 	def setUp(self):
 		self._original = frappe.local.conf.get("frappe_ai_agent_ssl_verify")
+		# the host's own environment must not leak into these cases
+		env = patch.dict("os.environ")
+		env.start()
+		self.addCleanup(env.stop)
+		os.environ.pop("FRAPPE_AI_AGENT_SSL_VERIFY", None)
 
 	def tearDown(self):
 		if self._original is None:
@@ -146,6 +153,40 @@ class TestAgentSslVerify(unittest.TestCase):
 	def test_custom_ca_path(self):
 		frappe.local.conf["frappe_ai_agent_ssl_verify"] = "/etc/ssl/custom.pem"
 		self.assertEqual(chat._agent_ssl_verify(), "/etc/ssl/custom.pem")
+
+	def test_env_var_applies_when_site_config_is_unset(self):
+		frappe.local.conf.pop("frappe_ai_agent_ssl_verify", None)
+		os.environ["FRAPPE_AI_AGENT_SSL_VERIFY"] = "false"
+		self.assertIs(chat._agent_ssl_verify(), False)
+		os.environ["FRAPPE_AI_AGENT_SSL_VERIFY"] = "true"
+		self.assertIs(chat._agent_ssl_verify(), True)
+		os.environ["FRAPPE_AI_AGENT_SSL_VERIFY"] = " /etc/ssl/ca.pem "
+		self.assertEqual(chat._agent_ssl_verify(), "/etc/ssl/ca.pem")
+
+	def test_blank_env_var_is_ignored(self):
+		frappe.local.conf.pop("frappe_ai_agent_ssl_verify", None)
+		os.environ["FRAPPE_AI_AGENT_SSL_VERIFY"] = "  "
+		self.assertIsNone(chat._agent_ssl_verify())
+
+	def test_site_config_wins_over_the_env_var(self):
+		frappe.local.conf["frappe_ai_agent_ssl_verify"] = True
+		os.environ["FRAPPE_AI_AGENT_SSL_VERIFY"] = "false"
+		self.assertIs(chat._agent_ssl_verify(), True)
+
+	def test_get_json_silences_the_insecure_warning_when_verification_is_off(self):
+		os.environ["FRAPPE_AI_AGENT_SSL_VERIFY"] = "false"
+		frappe.local.conf.pop("frappe_ai_agent_ssl_verify", None)
+		frappe.local.conf["frappe_ai_agent_url"] = "https://agent.example.test"
+		self.addCleanup(frappe.local.conf.pop, "frappe_ai_agent_url", None)
+		response = unittest.mock.MagicMock()
+		response.json.return_value = {"models": []}
+		with (
+			patch.object(chat.requests, "get", return_value=response) as get,
+			patch("urllib3.disable_warnings") as silence,
+		):
+			chat._agent_get_json("/api/v1/models")
+		self.assertIs(get.call_args.kwargs["verify"], False)
+		silence.assert_called_once()
 
 
 class TestAgentUrl(unittest.TestCase):

@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 from urllib.parse import urlparse
 
@@ -18,25 +19,34 @@ _DEFAULT_MESSAGE_MAX_CHARS = 10_000
 def _agent_ssl_verify():
 	"""Return SSL verification parameter for outbound requests to the AI agent.
 
-	Configured per-site via `frappe_ai_agent_ssl_verify` in site_config.json:
-	- False: disable SSL verification (for private internal cluster certificates)
-	- Path string: path to custom CA bundle file
-	- True: force standard CA verification
-	- None (default): do not pass verify override so requests uses its default / REQUESTS_CA_BUNDLE
+	Resolution order:
+	1. Per-site in site_config.json: `frappe_ai_agent_ssl_verify`
+	2. Environment variable: `FRAPPE_AI_AGENT_SSL_VERIFY` (a whole bench, e.g. its pods)
+	3. Default: None (requests' own default / REQUESTS_CA_BUNDLE)
+
+	The value is read the same either way:
+	- False / "false" / "0" / "no": disable SSL verification (private internal certificates)
+	- True / "true" / "1" / "yes": force standard CA verification
+	- Path string: path to a custom CA bundle file
 	"""
+	val = None
 	conf = getattr(frappe, "local", None) and getattr(frappe.local, "conf", None)
 	if conf:
 		val = conf.get("frappe_ai_agent_ssl_verify")
-		if val is False:
+	if val is None:
+		val = os.environ.get("FRAPPE_AI_AGENT_SSL_VERIFY")
+	if val is False:
+		return False
+	if val is True:
+		return True
+	if isinstance(val, str):
+		text = val.strip()
+		if text.lower() in ("false", "0", "no"):
 			return False
-		if isinstance(val, str) and val.lower() in ("false", "0", "no"):
-			return False
-		if val is True:
+		if text.lower() in ("true", "1", "yes"):
 			return True
-		if isinstance(val, str) and val.lower() in ("true", "1", "yes"):
-			return True
-		if isinstance(val, str) and val:
-			return val
+		if text:
+			return text
 	return None
 
 
@@ -330,6 +340,10 @@ def _agent_get_json(path: str) -> dict:
 	verify_ssl = _agent_ssl_verify()
 	if verify_ssl is not None:
 		kwargs["verify"] = verify_ssl
+	if verify_ssl is False:
+		import urllib3
+
+		urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 	response = requests.get(f"{agent_url}{path}", **kwargs)
 	response.raise_for_status()
 	data = response.json()
