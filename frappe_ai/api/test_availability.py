@@ -4,12 +4,12 @@ host's site_config switch that wins over it."""
 from types import SimpleNamespace
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from frappe_ai.api import availability
 
 
-class TestAvailability(FrappeTestCase):
+class TestAvailability(IntegrationTestCase):
 	def setUp(self):
 		original = frappe.local.conf.get(availability.HOST_KEY)
 		self.addCleanup(self._restore, original)

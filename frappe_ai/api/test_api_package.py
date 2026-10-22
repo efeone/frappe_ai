@@ -3,10 +3,10 @@
 import subprocess
 import sys
 
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 
-class TestApiPackage(FrappeTestCase):
+class TestApiPackage(IntegrationTestCase):
 	def test_importing_the_package_loads_none_of_its_modules(self):
 		# When it did, a threaded worker's first parallel requests (chat and confirm
 		# imported at once) failed with "deadlock detected by _ModuleLock".

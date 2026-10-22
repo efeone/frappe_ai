@@ -4,7 +4,7 @@ then neutral defaults; and nothing unsafe reaches the page."""
 from types import SimpleNamespace
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from frappe_ai.api import branding
 
@@ -13,7 +13,7 @@ def form(**values):
 	return SimpleNamespace(**{field: values.get(field) for field in branding.FIELDS.values()})
 
 
-class TestBranding(FrappeTestCase):
+class TestBranding(IntegrationTestCase):
 	def setUp(self):
 		for key in branding.CONF_KEYS.values():
 			original = frappe.local.conf.get(key)

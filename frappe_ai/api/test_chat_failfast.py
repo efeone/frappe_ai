@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import frappe
 import requests
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from frappe_ai.api import chat
 
@@ -31,7 +31,7 @@ def errors(published):
 	return [c for c in published if c.get("type") == "error"]
 
 
-class TestRelayFailsFast(FrappeTestCase):
+class TestRelayFailsFast(IntegrationTestCase):
 	def setUp(self):
 		self._conf = frappe.local.conf.get("frappe_ai_agent_connect_timeout")
 		frappe.local.conf.pop("frappe_ai_agent_connect_timeout", None)
