@@ -1,9 +1,9 @@
 from . import __version__ as app_version
 
 app_name = "frappe_ai"
-app_title = "AI Sidebar"
+app_title = "Vyogo AI"
 app_publisher = "Vyogo Technologies"
-app_description = "AI Sidebar for Frappe and ERPNext by Vyogo Technologies: a chat sidebar in the Desk that streams answers from the Vyogo AI agent, grounded in the page the user is on."
+app_description = "Vyogo AI for Frappe and ERPNext by Vyogo Technologies: a chat sidebar in the Desk that streams answers from the Vyogo AI agent, grounded in the page the user is on."
 app_email = "developers@vyogo.com"
 app_license = "MIT"
 

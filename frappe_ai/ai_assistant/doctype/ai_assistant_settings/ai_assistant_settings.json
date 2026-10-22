@@ -238,7 +238,7 @@
    "fieldname": "assistant_name",
    "fieldtype": "Data",
    "label": "Assistant Name",
-   "default": "AI Sidebar",
+   "default": "Vyogo AI",
    "length": 60
   },
   {

@@ -1,4 +1,4 @@
-# Contributing to AI Sidebar
+# Contributing to Vyogo AI
 
 A short, opinionated guide. The goal: someone unfamiliar can land a clean PR in an hour.
 

@@ -573,7 +573,7 @@ export function useChat() {
         .filter((m) => m.role !== "assistant" || !!m.content || !!m.blocks?.length);
     } catch (err) {
       // Swallow — restoring history is a nice-to-have, not a blocker.
-      console.warn("[AI Sidebar] loadRecentConversation failed", err);
+      console.warn("[Vyogo AI] loadRecentConversation failed", err);
     }
   }
 

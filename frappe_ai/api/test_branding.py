@@ -31,7 +31,7 @@ class TestBranding(IntegrationTestCase):
 		self.assertEqual(
 			branding.resolve(form()),
 			{
-				"assistant_name": "AI Sidebar",
+				"assistant_name": "Vyogo AI",
 				"assistant_byline": "",
 				"assistant_logo_url": "",
 				"accent_color": "",

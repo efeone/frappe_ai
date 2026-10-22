@@ -10,7 +10,7 @@ withDefaults(
 		/** A small square mark before the name. Hidden when empty. */
 		logoUrl?: string;
 	}>(),
-	{ name: "AI Sidebar", byline: "", logoUrl: "" },
+	{ name: "Vyogo AI", byline: "", logoUrl: "" },
 );
 
 const emit = defineEmits<{

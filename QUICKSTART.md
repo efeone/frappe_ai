@@ -1,4 +1,4 @@
-# AI Sidebar — Quick Start
+# Vyogo AI — Quick Start
 
 Up and running in 5 minutes.
 

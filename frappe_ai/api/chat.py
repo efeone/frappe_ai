@@ -461,7 +461,7 @@ def start_stream(
 
 	if confirmation is not None:
 		if confirm.decide(confirmation["tool"], user, session_id) == "deny":
-			frappe.throw(_("The AI Sidebar is not allowed to change data on this site."))
+			frappe.throw(_("The Vyogo AI is not allowed to change data on this site."))
 		confirmation["token"] = confirm.issue(user, confirmation["tool"], confirmation["arguments"])
 
 	timeout_seconds = int(settings.timeout or 30)
@@ -506,7 +506,7 @@ def _agent_connect_timeout() -> float:
 
 
 # Shown in place of the confirmation card when the site is read-only for the assistant.
-READ_ONLY_NOTE = "This change was not made: the AI Sidebar is not allowed to change data on this site."
+READ_ONLY_NOTE = "This change was not made: the Vyogo AI is not allowed to change data on this site."
 
 
 def _stream_to_agent(

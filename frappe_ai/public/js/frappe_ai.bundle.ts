@@ -36,7 +36,7 @@ function injectNavbarButton(keyboardShortcut: string): void {
       `<button id="frappe-ai-nav-btn" type="button"
                class="btn-reset nav-link text-muted"
                style="cursor:pointer;background:transparent;border:none;display:flex;align-items:center;justify-content:center;padding:0 6px"
-               title="AI Sidebar (${keyboardShortcut})">${frappeIcon("message-square-text", "md")}</button>`,
+               title="Vyogo AI (${keyboardShortcut})">${frappeIcon("message-square-text", "md")}</button>`,
     );
   }
 
@@ -56,9 +56,9 @@ function injectNavbarButton(keyboardShortcut: string): void {
     //     mimics Getting Started's `<p>` wrapper margin).
     return makeButton(
       `<a id="frappe-ai-nav-btn" class="onboarding-sidebar frappe-ai-nav-link px-2"
-          title="AI Sidebar (${keyboardShortcut})">
+          title="Vyogo AI (${keyboardShortcut})">
           ${frappeIcon("message-square-text", "sm", "text-ink-gray-7 current-color")}
-          <span class="sidebar-item-label">AI Sidebar</span>
+          <span class="sidebar-item-label">Vyogo AI</span>
       </a>`,
     );
   }
@@ -220,7 +220,7 @@ function mountSidebar(sidebarWidth: number, keyboardShortcut: string): void {
   frappe.ui.keys.add_shortcut({
     shortcut: keyboardShortcut.toLowerCase(),
     action: toggleSidebar,
-    description: "Toggle AI Sidebar",
+    description: "Toggle Vyogo AI",
     ignore_inputs: false,
   });
 }
@@ -272,7 +272,7 @@ function injectDisabledHint(): void {
     tpl.innerHTML = `
       <a id="frappe-ai-disabled-hint"
          href="/app/ai-assistant-settings"
-         title="AI Sidebar is disabled — open settings to re-enable"
+         title="Vyogo AI is disabled — open settings to re-enable"
          style="display:flex;align-items:center;color:var(--ink-gray-5,#888);padding:0 6px;text-decoration:none"
          class="nav-link text-muted">
         ${frappeIcon("message-square-text", "md")}

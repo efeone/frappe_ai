@@ -21,7 +21,7 @@ import re
 
 import frappe
 
-DEFAULT_NAME = "AI Sidebar"
+DEFAULT_NAME = "Vyogo AI"
 
 CONF_KEYS = {
 	"name": "frappe_ai_assistant_name",

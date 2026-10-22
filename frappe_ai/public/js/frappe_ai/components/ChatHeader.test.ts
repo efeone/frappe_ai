@@ -5,7 +5,7 @@ import ChatHeader from "./ChatHeader.vue";
 describe("ChatHeader", () => {
   it("renders a neutral title, no byline or logo, and three icon buttons by default", () => {
     const wrapper = mount(ChatHeader);
-    expect(wrapper.find(".frappe-ai-header-title").text()).toBe("AI Sidebar");
+    expect(wrapper.find(".frappe-ai-header-title").text()).toBe("Vyogo AI");
     expect(wrapper.find(".frappe-ai-header-brand").exists()).toBe(false);
     expect(wrapper.find("img.frappe-ai-header-logo").exists()).toBe(false);
     const buttons = wrapper.findAll("button.frappe-ai-icon-btn");

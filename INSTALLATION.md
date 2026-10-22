@@ -1,6 +1,6 @@
-# AI Sidebar — Installation Guide
+# Vyogo AI — Installation Guide
 
-End-to-end install and configuration of AI Sidebar by Vyogo Technologies (app module `frappe_ai`).
+End-to-end install and configuration of Vyogo AI by Vyogo Technologies (app module `frappe_ai`).
 
 ## Prerequisites
 

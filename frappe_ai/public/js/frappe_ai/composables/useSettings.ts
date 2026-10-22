@@ -1,4 +1,4 @@
-/** Load AI Sidebar settings from the backend. Module-level singleton. */
+/** Load Vyogo AI settings from the backend. Module-level singleton. */
 
 import { ref, readonly, type Ref } from "vue";
 
@@ -41,7 +41,7 @@ const DEFAULT_SETTINGS: FrappeAISettings = {
   keyboardShortcut: "Alt+/",
   writeApproval: WRITE_APPROVAL_ASK,
   allowSessionAutoApprove: false,
-  assistantName: "AI Sidebar",
+  assistantName: "Vyogo AI",
   assistantByline: "",
   assistantLogoUrl: "",
   accentColor: "",

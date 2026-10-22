@@ -32,7 +32,7 @@ def _ensure_settings():
 
 
 def _sync_workspace():
-	"""Force-import the AI Sidebar workspace JSON so an existing install picks up
+	"""Force-import the Vyogo AI workspace JSON so an existing install picks up
 	updates to the workspace content blob on every migrate.
 
 	Frappe's normal sync (`bench migrate`) installs a workspace from JSON only
