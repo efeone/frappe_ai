@@ -62,8 +62,7 @@ class TestHealthEndpoint(unittest.TestCase):
 		_, kwargs = mock_get.call_args
 		self.assertEqual(kwargs["cookies"], {"sid": frappe.session.sid})
 		self.assertEqual(kwargs["timeout"], 10)
-		# TLS trust is the platform's: no per-call override, so REQUESTS_CA_BUNDLE applies.
-		self.assertNotIn("verify", kwargs)
+		self.assertEqual(kwargs.get("verify"), False)
 
 	@patch("requests.get")
 	def test_ssl_verify_disabled(self, mock_get):

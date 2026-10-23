@@ -133,9 +133,9 @@ class TestAgentSslVerify(unittest.TestCase):
 		else:
 			frappe.local.conf["frappe_ai_agent_ssl_verify"] = self._original
 
-	def test_none_when_unset(self):
+	def test_false_when_unset(self):
 		frappe.local.conf.pop("frappe_ai_agent_ssl_verify", None)
-		self.assertIsNone(chat._agent_ssl_verify())
+		self.assertIs(chat._agent_ssl_verify(), False)
 
 	def test_false_boolean(self):
 		frappe.local.conf["frappe_ai_agent_ssl_verify"] = False
@@ -163,10 +163,10 @@ class TestAgentSslVerify(unittest.TestCase):
 		os.environ["FRAPPE_AI_AGENT_SSL_VERIFY"] = " /etc/ssl/ca.pem "
 		self.assertEqual(chat._agent_ssl_verify(), "/etc/ssl/ca.pem")
 
-	def test_blank_env_var_is_ignored(self):
+	def test_blank_env_var_falls_back_to_false(self):
 		frappe.local.conf.pop("frappe_ai_agent_ssl_verify", None)
 		os.environ["FRAPPE_AI_AGENT_SSL_VERIFY"] = "  "
-		self.assertIsNone(chat._agent_ssl_verify())
+		self.assertIs(chat._agent_ssl_verify(), False)
 
 	def test_site_config_wins_over_the_env_var(self):
 		frappe.local.conf["frappe_ai_agent_ssl_verify"] = True

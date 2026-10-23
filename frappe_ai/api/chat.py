@@ -22,7 +22,7 @@ def _agent_ssl_verify():
 	Resolution order:
 	1. Per-site in site_config.json: `frappe_ai_agent_ssl_verify`
 	2. Environment variable: `FRAPPE_AI_AGENT_SSL_VERIFY` (a whole bench, e.g. its pods)
-	3. Default: None (requests' own default / REQUESTS_CA_BUNDLE)
+	3. Default: False (disable SSL verification by default for internal cluster services)
 
 	The value is read the same either way:
 	- False / "false" / "0" / "no": disable SSL verification (private internal certificates)
@@ -47,7 +47,7 @@ def _agent_ssl_verify():
 			return True
 		if text:
 			return text
-	return None
+	return False
 
 
 def _agent_url() -> str:
