@@ -15,6 +15,7 @@ import TableBlock from "./TableBlock.vue";
 import KPICards from "./KPICards.vue";
 import StatusList from "./StatusList.vue";
 import ChartBlock from "./ChartBlock.vue";
+import ActionBar from "./ActionBar.vue";
 
 export const blockComponentMap: Record<BlockType, Component> = {
   text: TextBlock,
@@ -22,6 +23,7 @@ export const blockComponentMap: Record<BlockType, Component> = {
   table: TableBlock,
   kpi: KPICards,
   status_list: StatusList,
+  actions: ActionBar,
 };
 
 export function getBlockComponent(type: string): Component | undefined {

@@ -89,11 +89,34 @@ export interface StatusListBlock {
   items: StatusItem[];
 }
 
+/** A button under an answer that takes the reader into the Desk.
+ *  `new_doc` opens a prefilled form, `list` a filtered list view,
+ *  `open` a single document. */
+export type ActionKind = "new_doc" | "list" | "open";
+
+export interface ActionItem {
+  label: string;
+  kind: ActionKind;
+  doctype: string;
+  /** new_doc: field values to prefill. */
+  values?: Record<string, unknown>;
+  /** list: filters to apply to the list view. */
+  filters?: Record<string, unknown>;
+  /** open: the document name. */
+  name?: string;
+}
+
+export interface ActionsBlock {
+  type: "actions";
+  items: ActionItem[];
+}
+
 export type ContentBlock =
   | TextBlock
   | ChartBlock
   | TableBlock
   | KPIBlock
-  | StatusListBlock;
+  | StatusListBlock
+  | ActionsBlock;
 
 export type BlockType = ContentBlock["type"];
